@@ -1,0 +1,24 @@
+Neos:
+  Flow:
+    error:
+      exceptionHandler:
+        className: Netlogix\ErrorHandler\Handler\ProductionExceptionHandler
+
+        renderingGroups:
+          serverErrorExceptions:
+            matchingStatusCodes: [ 500 ]
+            options:
+              logException: true
+
+
+Netlogix:
+  ErrorHandler:
+
+    pages: []
+
+#      'my-site':
+#        -
+#          dimensions:
+#            language: ['en_US', 'en']
+#          source: '#550e8400-e29b-11d4-a716-446655440000'
+#          destination: '${"/var/www/default/" + site + "/" + dimensions + "/500.html"}'

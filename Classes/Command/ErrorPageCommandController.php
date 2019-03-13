@@ -9,15 +9,18 @@ namespace Netlogix\ErrorHandler\Command;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\StreamWrapper;
+use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Cli\CommandController;
 use Neos\Flow\Core\Bootstrap;
 use Neos\Flow\Http\Uri;
+use Neos\Neos\Controller\Exception\NodeNotFoundException;
 use Neos\Neos\Domain\Model\Domain;
 use Neos\Neos\Domain\Model\Site;
 use Neos\Neos\Domain\Repository\SiteRepository;
 use Neos\Neos\Domain\Service\ContentContextFactory;
 use Neos\Neos\Service\LinkingService;
+use Neos\Utility\Files;
 use Netlogix\ErrorHandler\Configuration\ErrorHandlerConfiguration;
 use Netlogix\ErrorHandler\Service\ControllerContextFactory;
 
@@ -75,20 +78,46 @@ class ErrorPageCommandController extends CommandController
         $client = new Client([
             'verify' => $this->bootstrap->getContext()->isProduction()
         ]);
+        $hadError = false;
 
         foreach ($this->configuration->getConfiguration() as $siteNodeName => $configurations) {
             foreach ($configurations as $configuration) {
                 $site = $this->siteRepository->findOneByNodeName($siteNodeName);
                 assert($site instanceof Site);
-                $requestUri = $this->getSiteUri($site, $configuration);
+                try {
+                    $requestUri = $this->getSiteUri($site, $configuration);
+                } catch (\Exception $e) {
+                    $verbose && $this->outputLine('Could not resolve Error Page Uri for %s, "%s"', [$siteNodeName, $e->getMessage()]);
+                    continue;
+                }
                 $verbose && $this->outputLine('Downloading Error Page for %s from %s', [$siteNodeName, $requestUri]);
 
-                $response = $client->get($requestUri);
+                try {
+                    $response = $client->get($requestUri);
+                } catch (\Exception $e) {
+                    $hadError = true;
+                    $this->outputLine('Could not fetch Error Page for %s, "%s"', [$siteNodeName, $e->getMessage()]);
+                    continue;
+                }
 
                 $destination = $this->configuration->getDestinationForConfiguration($configuration, $siteNodeName, $requestUri);
+                $directory = dirname($destination);
+                if (!is_dir($directory)) {
+                    try {
+                        Files::createDirectoryRecursively($destination);
+                    } catch (\Exception $e) {
+                        $hadError = true;
+                        $this->outputLine('Could not create target directory for %s, "%s"', [$siteNodeName, $e->getMessage()]);
+                        continue;
+                    }
+                }
                 $file = fopen($destination, 'w+');
                 stream_copy_to_stream(StreamWrapper::getResource($response->getBody()), $file);
             }
+        }
+
+        if ($hadError) {
+            $this->sendAndExit(1);
         }
     }
 
@@ -111,10 +140,38 @@ class ErrorPageCommandController extends CommandController
 
         $context = $this->getContextForSite($site, $domain, $configuration['dimensions']);
         $source = $context->getNodeByIdentifier(substr($configuration['source'], 1));
+
+        if (!$source instanceof NodeInterface) {
+            throw new NodeNotFoundException('Could not get source node in site ' . $site->getNodeName(), 1552492278);
+        }
+
+        if (!$this->isNodeVisible($source)) {
+            throw new NodeNotFoundException('Node for site ' . $site->getNodeName() . ' is not visible', 1552492532);
+        }
+
         $controllerContext = $this->controllerContextFactory->buildControllerContext($domain->__toString());
         $nodeUri = $this->linkingService->createNodeUri($controllerContext, $source, null, null, true);
 
         return new Uri($nodeUri);
+    }
+
+    /**
+     * @param NodeInterface $node
+     * @return bool
+     */
+    protected function isNodeVisible(NodeInterface $node)
+    {
+        $currentNode = $node;
+
+        do {
+            if (!$currentNode->isVisible()) {
+                return false;
+            }
+
+            $currentNode = $currentNode->getParent();
+        } while ($currentNode !== null);
+
+        return true;
     }
 
     /**
@@ -132,7 +189,8 @@ class ErrorPageCommandController extends CommandController
             }, $dimensions),
             'dimensions' => $dimensions,
             'currentSite' => $site,
-            'currentDomain' => $domain
+            'currentDomain' => $domain,
+            'invisibleContentShown' => true
         ]);
     }
 

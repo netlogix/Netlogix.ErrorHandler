@@ -104,7 +104,7 @@ class ErrorPageCommandController extends CommandController
                 $directory = dirname($destination);
                 if (!is_dir($directory)) {
                     try {
-                        Files::createDirectoryRecursively($destination);
+                        Files::createDirectoryRecursively($directory);
                     } catch (\Exception $e) {
                         $hadError = true;
                         $this->outputLine('Could not create target directory for %s, "%s"', [$siteNodeName, $e->getMessage()]);

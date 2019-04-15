@@ -31,6 +31,12 @@ class ErrorPageCommandController extends CommandController
 {
 
     /**
+     * @Flow\InjectConfiguration(path="generatePages")
+     * @var bool
+     */
+    protected $generatePages;
+
+    /**
      * @Flow\Inject
      * @var Bootstrap
      */
@@ -75,6 +81,11 @@ class ErrorPageCommandController extends CommandController
      */
     public function generateCommand(bool $verbose = false)
     {
+        if (!$this->generatePages) {
+            $verbose && $this->outputLine('Skipping generation because Netlogix.ErrorHandler.generatePages is false');
+            $this->sendAndExit(0);
+        }
+
         $client = new Client([
             'verify' => $this->bootstrap->getContext()->isProduction()
         ]);

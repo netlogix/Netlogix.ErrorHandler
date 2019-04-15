@@ -13,7 +13,7 @@ Neos:
 
 Netlogix:
   ErrorHandler:
-
+    generatePages: true
     pages: []
 
 #      'my-site':

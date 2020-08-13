@@ -2,8 +2,6 @@ Neos:
   Flow:
     error:
       exceptionHandler:
-        className: Netlogix\ErrorHandler\Handler\ProductionExceptionHandler
-
         renderingGroups:
           serverErrorExceptions:
             matchingStatusCodes: [ 500 ]

@@ -7,14 +7,13 @@ namespace Netlogix\ErrorHandler\Configuration;
  * This file is part of the Netlogix.ErrorHandler package.
  */
 
-use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\Eel\CompilingEvaluator;
 use Neos\Eel\Utility as EelUtility;
 use Neos\ContentRepository\Utility as CrUtility;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Http\Uri;
-use Neos\Flow\Property\PropertyMapper;
-use Neos\Neos\Domain\Service\ContentContext;
+use Neos\Neos\Domain\Model\Site;
+use Netlogix\ErrorHandler\Service\DimensionResolver;
 
 /**
  * @Flow\Scope("singleton")
@@ -36,29 +35,27 @@ class ErrorHandlerConfiguration
 
     /**
      * @Flow\Inject
-     * @var PropertyMapper
+     * @var DimensionResolver
      */
-    protected $propertyMapper;
+    protected $dimensionResolver;
 
     /**
-     * @param string $contextPath
-     * @return array|null
-     * @throws \Neos\Flow\Property\Exception
-     * @throws \Neos\Flow\Security\Exception
+     * @param Site $site
+     * @param Uri $uri
+     * @param int $statusCode
+     * @return mixed|null
      */
-    public function findConfigurationForContextPath(string $contextPath)
-    {
-        $node = $this->propertyMapper->convert($contextPath, NodeInterface::class);
-        assert($node instanceof NodeInterface);
-        $context = $node->getContext();
-        assert($context instanceof ContentContext);
-
-        $siteName = $context->getCurrentSite()->getNodeName();
+    public function findConfigurationForSite(
+        Site $site,
+        Uri $uri,
+        int $statusCode
+    ) {
+        $siteName = $site->getNodeName();
         $configurationsForSite = array_key_exists($siteName, $this->pages) ? $this->pages[$siteName] : [];
+        $targetDimensions = $this->getDimensionsByRequestUri($uri);
 
         $matchingConfigurations = array_filter($configurationsForSite,
-            function (array $configuration) use ($node, $context) {
-                $targetDimensions = $context->getTargetDimensionValues();
+            function (array $configuration) use ($targetDimensions, $statusCode) {
                 $configurationDimensions = $configuration['dimensions'];
                 CrUtility::sortDimensionValueArrayAndReturnDimensionsHash($configurationDimensions);
 
@@ -70,6 +67,10 @@ class ErrorHandlerConfiguration
                     if (!empty(array_diff($configurationDimensions[$dimension], $values))) {
                         return false;
                     }
+                }
+
+                if (!in_array($statusCode, $configuration['matchingStatusCodes'] ?? [], true)) {
+                    return false;
                 }
 
                 return true;
@@ -96,11 +97,16 @@ class ErrorHandlerConfiguration
      * @return string
      * @throws \Neos\Eel\Exception
      */
-    public function getDestinationForConfiguration(array $config, string $siteNodeName, Uri $requestUri): string
-    {
+    public function getDestinationForConfiguration(
+        array $config,
+        string $siteNodeName,
+        Uri $requestUri
+    ): string {
+        $firstUriPathSegment = current(explode('/', ltrim($requestUri->getPath() ?? '', '/'), 2));
+
         return $this->evaluateEelExpression($config['destination'], [
             'site' => $siteNodeName,
-            'dimensions' => current(explode('/', ltrim($requestUri->getPath(), '/')))
+            'dimensions' => $firstUriPathSegment,
         ]);
     }
 
@@ -110,6 +116,11 @@ class ErrorHandlerConfiguration
     public function getConfiguration()
     {
         return $this->pages;
+    }
+
+    private function getDimensionsByRequestUri(Uri $uri): array
+    {
+        return $this->dimensionResolver->determineDimensionValuesByRequestUri($uri);
     }
 
 }

@@ -111,6 +111,7 @@ class ErrorPageCommandController extends CommandController
                         continue;
                     }
                 }
+                $verbose && $this->outputLine('Saving Error Page for %s to %s', [$siteNodeName, $destination]);
                 $file = fopen($destination, 'w+');
                 stream_copy_to_stream(StreamWrapper::getResource($response->getBody()), $file);
             }

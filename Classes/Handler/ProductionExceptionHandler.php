@@ -8,11 +8,9 @@ namespace Netlogix\ErrorHandler\Handler;
  */
 
 use Neos\Flow\Core\Bootstrap;
-use Neos\Flow\Mvc\ActionRequest;
-use Neos\Flow\Mvc\DispatchComponent;
+use Neos\Flow\Http\HttpRequestHandlerInterface;
 use Neos\Flow\ObjectManagement\ObjectManagerInterface;
 use Neos\Neos\Domain\Repository\DomainRepository;
-use Neos\Utility\ObjectAccess;
 use Netlogix\ErrorHandler\Configuration\ErrorHandlerConfiguration;
 use Networkteam\SentryClient\Handler\ProductionExceptionHandler as SentryProductionExceptionHandler;
 
@@ -27,7 +25,7 @@ class ProductionExceptionHandler extends SentryProductionExceptionHandler
      */
     protected function renderStatically(int $statusCode, string $referenceCode = null): string
     {
-        $errorPage = $this->findErrorPageConfigurationForRequest();
+        $errorPage = $this->findErrorPageConfigurationForRequest($statusCode);
 
         if ($errorPage === null || !file_exists($errorPage)) {
             return parent::renderStatically($statusCode, $referenceCode);
@@ -37,29 +35,18 @@ class ProductionExceptionHandler extends SentryProductionExceptionHandler
     }
 
     /**
+     * @param int $statusCode
      * @return string|null
      * @throws \Exception
      */
-    protected function findErrorPageConfigurationForRequest()
+    protected function findErrorPageConfigurationForRequest(int $statusCode)
     {
         if (!Bootstrap::$staticObjectManager instanceof ObjectManagerInterface) {
             return null;
         }
 
         $requestHandler = Bootstrap::$staticObjectManager->get(Bootstrap::class)->getActiveRequestHandler();
-        $componentContext = ObjectAccess::getProperty($requestHandler, 'componentContext', true);
-        $actionRequest = $componentContext->getParameter(DispatchComponent::class, 'actionRequest');
-        assert($actionRequest instanceof ActionRequest);
-
-        if (!$actionRequest->hasArgument('node')) {
-            return null;
-        }
-
-        $errorHandlerConfiguration = Bootstrap::$staticObjectManager->get(ErrorHandlerConfiguration::class);
-        $node = $actionRequest->getArgument('node');
-        $configuration = $errorHandlerConfiguration->findConfigurationForContextPath($node);
-
-        if (!$configuration) {
+        if (!$requestHandler instanceof HttpRequestHandlerInterface) {
             return null;
         }
 
@@ -69,10 +56,18 @@ class ProductionExceptionHandler extends SentryProductionExceptionHandler
             return null;
         }
 
+        $currentSite = $currentDomain->getSite();
+        $errorHandlerConfiguration = Bootstrap::$staticObjectManager->get(ErrorHandlerConfiguration::class);
+        $configuration = $errorHandlerConfiguration->findConfigurationForSite($currentSite, $requestHandler->getHttpRequest()->getUri(), $statusCode);
+
+        if (!$configuration) {
+            return null;
+        }
+
         return $errorHandlerConfiguration->getDestinationForConfiguration(
             $configuration,
             $currentDomain->getSite()->getNodeName(),
-            $actionRequest->getHttpRequest()->getUri()
+            $requestHandler->getHttpRequest()->getUri()
         );
     }
 

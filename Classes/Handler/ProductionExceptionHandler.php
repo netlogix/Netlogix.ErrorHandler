@@ -66,8 +66,7 @@ class ProductionExceptionHandler extends SentryProductionExceptionHandler
 
         return $errorHandlerConfiguration->getDestinationForConfiguration(
             $configuration,
-            $currentDomain->getSite()->getNodeName(),
-            $requestHandler->getHttpRequest()->getUri()
+            $currentDomain->getSite()->getNodeName()
         );
     }
 

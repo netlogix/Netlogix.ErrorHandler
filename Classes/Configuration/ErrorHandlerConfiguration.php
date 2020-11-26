@@ -9,11 +9,9 @@ namespace Netlogix\ErrorHandler\Configuration;
 
 use Neos\Eel\CompilingEvaluator;
 use Neos\Eel\Utility as EelUtility;
-use Neos\ContentRepository\Utility as CrUtility;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Http\Uri;
 use Neos\Neos\Domain\Model\Site;
-use Netlogix\ErrorHandler\Service\DimensionResolver;
 
 /**
  * @Flow\Scope("singleton")
@@ -34,12 +32,10 @@ class ErrorHandlerConfiguration
     protected $eelEvaluator;
 
     /**
-     * @Flow\Inject
-     * @var DimensionResolver
-     */
-    protected $dimensionResolver;
-
-    /**
+     * Find error page configuration by Site, Dimension (parsed in $uri) and status code.
+     * If no configuration is found that matches the parsed dimensionPathSegment, the first configuration
+     * for the Site and statusCode is used.
+     *
      * @param Site $site
      * @param Uri $uri
      * @param int $statusCode
@@ -52,31 +48,19 @@ class ErrorHandlerConfiguration
     ) {
         $siteName = $site->getNodeName();
         $configurationsForSite = array_key_exists($siteName, $this->pages) ? $this->pages[$siteName] : [];
-        $targetDimensions = $this->getDimensionsByRequestUri($uri);
+        $dimensionPathSegment = current(explode('/', ltrim($uri->getPath() ?? '', '/'), 2));
 
-        $matchingConfigurations = array_filter($configurationsForSite,
-            function (array $configuration) use ($targetDimensions, $statusCode) {
-                $configurationDimensions = $configuration['dimensions'];
-                CrUtility::sortDimensionValueArrayAndReturnDimensionsHash($configurationDimensions);
-
-                foreach ($targetDimensions as $dimension => $values) {
-                    if (!array_key_exists($dimension, $configurationDimensions)) {
-                        continue;
-                    }
-
-                    if (!empty(array_diff($configurationDimensions[$dimension], $values))) {
-                        return false;
-                    }
-                }
-
-                if (!in_array($statusCode, $configuration['matchingStatusCodes'] ?? [], true)) {
-                    return false;
-                }
-
-                return true;
+        $matchingStatusCodes = array_filter($configurationsForSite,
+            function (array $configuration) use ($dimensionPathSegment, $statusCode) {
+                return in_array($statusCode, $configuration['matchingStatusCodes'] ?? [], true);
             });
 
-        return !empty($matchingConfigurations) ? current($matchingConfigurations) : null;
+        $matchingDimensions = array_filter($matchingStatusCodes,
+            function (array $configuration) use ($dimensionPathSegment, $statusCode) {
+                return ($configuration['dimensionPathSegment'] ?? '') === $dimensionPathSegment;
+            });
+
+        return current($matchingDimensions) ?: current($matchingStatusCodes) ?: null;
     }
 
     /**
@@ -99,14 +83,13 @@ class ErrorHandlerConfiguration
      */
     public function getDestinationForConfiguration(
         array $config,
-        string $siteNodeName,
-        Uri $requestUri
+        string $siteNodeName
     ): string {
-        $firstUriPathSegment = current(explode('/', ltrim($requestUri->getPath() ?? '', '/'), 2));
+        $dimensionPathSegment = $config['dimensionPathSegment'] ?? '';
 
         return $this->evaluateEelExpression($config['destination'], [
             'site' => $siteNodeName,
-            'dimensions' => $firstUriPathSegment,
+            'dimensions' => $dimensionPathSegment,
         ]);
     }
 
@@ -116,11 +99,6 @@ class ErrorHandlerConfiguration
     public function getConfiguration()
     {
         return $this->pages;
-    }
-
-    private function getDimensionsByRequestUri(Uri $uri): array
-    {
-        return $this->dimensionResolver->determineDimensionValuesByRequestUri($uri);
     }
 
 }

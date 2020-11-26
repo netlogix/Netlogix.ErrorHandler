@@ -16,6 +16,7 @@ Netlogix:
 
 #      'my-site':
 #        -
+#          dimensionPathSegment: 'en_US'
 #          dimensions:
 #            language: ['en_US', 'en']
 #          matchingStatusCodes: [500]

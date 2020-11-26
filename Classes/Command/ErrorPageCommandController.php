@@ -100,7 +100,7 @@ class ErrorPageCommandController extends CommandController
                     continue;
                 }
 
-                $destination = $this->configuration->getDestinationForConfiguration($configuration, $siteNodeName, $requestUri);
+                $destination = $this->configuration->getDestinationForConfiguration($configuration, $siteNodeName);
                 $directory = dirname($destination);
                 if (!is_dir($directory)) {
                     try {

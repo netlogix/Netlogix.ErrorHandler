@@ -3,10 +3,6 @@ declare(strict_types=1);
 
 namespace Netlogix\ErrorHandler\Handler;
 
-/*
- * This file is part of the Netlogix.ErrorHandler package.
- */
-
 use Neos\Flow\Core\Bootstrap;
 use Neos\Flow\Http\HttpRequestHandlerInterface;
 use Neos\Flow\ObjectManagement\ObjectManagerInterface;

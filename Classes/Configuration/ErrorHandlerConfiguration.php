@@ -3,15 +3,15 @@ declare(strict_types=1);
 
 namespace Netlogix\ErrorHandler\Configuration;
 
-/*
- * This file is part of the Netlogix.ErrorHandler package.
- */
-
 use Neos\Eel\CompilingEvaluator;
 use Neos\Eel\Utility as EelUtility;
 use Neos\Flow\Annotations as Flow;
-use Neos\Flow\Http\Uri;
 use Neos\Neos\Domain\Model\Site;
+use Psr\Http\Message\UriInterface;
+use function array_filter;
+use function current;
+use function explode;
+use function in_array;
 
 /**
  * @Flow\Scope("singleton")
@@ -37,13 +37,13 @@ class ErrorHandlerConfiguration
      * for the Site and statusCode is used.
      *
      * @param Site $site
-     * @param Uri $uri
+     * @param UriInterface $uri
      * @param int $statusCode
      * @return mixed|null
      */
     public function findConfigurationForSite(
         Site $site,
-        Uri $uri,
+        UriInterface $uri,
         int $statusCode
     ) {
         $siteName = $site->getNodeName();
@@ -77,7 +77,6 @@ class ErrorHandlerConfiguration
     /**
      * @param array $config
      * @param string $siteNodeName
-     * @param Uri $requestUri
      * @return string
      * @throws \Neos\Eel\Exception
      */

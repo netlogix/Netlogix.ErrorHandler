@@ -3,17 +3,14 @@ declare(strict_types=1);
 
 namespace Netlogix\ErrorHandler\Command;
 
-/*
- * This file is part of the Netlogix.ErrorHandler package.
- */
-
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\StreamWrapper;
+use GuzzleHttp\Psr7\Uri;
 use Neos\ContentRepository\Domain\Model\NodeInterface;
+use Neos\ContentRepository\Domain\Service\Context;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Cli\CommandController;
 use Neos\Flow\Core\Bootstrap;
-use Neos\Flow\Http\Uri;
 use Neos\Neos\Controller\Exception\NodeNotFoundException;
 use Neos\Neos\Domain\Model\Domain;
 use Neos\Neos\Domain\Model\Site;
@@ -23,6 +20,10 @@ use Neos\Neos\Service\LinkingService;
 use Neos\Utility\Files;
 use Netlogix\ErrorHandler\Configuration\ErrorHandlerConfiguration;
 use Netlogix\ErrorHandler\Service\ControllerContextFactory;
+use function dirname;
+use function fopen;
+use function is_dir;
+use function stream_copy_to_stream;
 
 /**
  * @Flow\Scope("singleton")
@@ -70,7 +71,6 @@ class ErrorPageCommandController extends CommandController
      * Generate Error Pages for configured Sites
      *
      * @param bool $verbose
-     *
      * @throws \Exception
      */
     public function generateCommand(bool $verbose = false)
@@ -126,11 +126,7 @@ class ErrorPageCommandController extends CommandController
      * @param Site $site
      * @param array $configuration
      * @return Uri
-     * @throws \Neos\Flow\Configuration\Exception\InvalidConfigurationTypeException
-     * @throws \Neos\Flow\Mvc\Exception\InvalidActionNameException
-     * @throws \Neos\Flow\ObjectManagement\Exception\UnknownObjectException
-     * @throws \Neos\Neos\Exception
-     * @throws \Neos\Utility\Exception\PropertyNotAccessibleException
+     * @throws NodeNotFoundException
      */
     protected function getSiteUri(Site $site, array $configuration)
     {
@@ -150,7 +146,7 @@ class ErrorPageCommandController extends CommandController
             throw new NodeNotFoundException('Node for site ' . $site->getNodeName() . ' is not visible', 1552492532);
         }
 
-        $controllerContext = $this->controllerContextFactory->buildControllerContext($domain->__toString());
+        $controllerContext = $this->controllerContextFactory->buildControllerContext(new Uri($domain->__toString()));
         $nodeUri = $this->linkingService->createNodeUri($controllerContext, $source, null, null, true);
 
         return new Uri($nodeUri);
@@ -160,7 +156,7 @@ class ErrorPageCommandController extends CommandController
      * @param NodeInterface $node
      * @return bool
      */
-    protected function isNodeVisible(NodeInterface $node)
+    protected function isNodeVisible(NodeInterface $node): bool
     {
         $currentNode = $node;
 
@@ -179,13 +175,13 @@ class ErrorPageCommandController extends CommandController
      * @param Site $site
      * @param Domain $domain
      * @param array $dimensions
-     * @return \Neos\ContentRepository\Domain\Service\Context
+     * @return Context
      */
-    protected function getContextForSite(Site $site, Domain $domain, array $dimensions)
+    protected function getContextForSite(Site $site, Domain $domain, array $dimensions): Context
     {
         return $this->contentContextFactory->create([
             'workspaceName' => 'live',
-            'targetDimensions' => array_map(function(array $dimensionValues) {
+            'targetDimensions' => array_map(function (array $dimensionValues) {
                 return current($dimensionValues);
             }, $dimensions),
             'dimensions' => $dimensions,

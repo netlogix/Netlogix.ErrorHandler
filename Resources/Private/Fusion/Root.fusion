@@ -1,0 +1,24 @@
+error = Neos.Fusion:Case {
+    nlxErrorHandler {
+        @position = 'before default'
+
+        errorPage = ${Netlogix.ErrorPageResolver.findErrorPageForCurrentRequestAndStatusCode(statusCode)}
+        condition = ${this.errorPage != null && File.exists(this.errorPage)}
+        renderer = ${File.readFile(this.errorPage)}
+    }
+
+    default {
+        @position = 'end 9999'
+        condition = true
+        renderer = Neos.Fusion:Template {
+            templatePath = 'resource://Neos.Neos/Private/Templates/Error/Index.html'
+            layoutRootPath = 'resource://Neos.Neos/Private/Layouts/'
+
+            exception = ${exception}
+            renderingOptions = ${renderingOptions}
+            statusCode = ${statusCode}
+            statusMessage = ${statusMessage}
+            referenceCode = ${referenceCode}
+        }
+    }
+}

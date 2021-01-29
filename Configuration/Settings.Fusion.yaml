@@ -1,0 +1,9 @@
+Neos:
+  Neos:
+    fusion:
+      autoInclude:
+        'Netlogix.ErrorHandler': true
+
+  Fusion:
+    defaultContext:
+      Netlogix.ErrorPageResolver: Netlogix\ErrorHandler\Service\ErrorPageResolver

@@ -54,6 +54,10 @@ class ErrorPageResolver implements ProtectedContextAwareInterface
         }
 
         $currentSite = $currentDomain->getSite();
+        if (!$currentSite) {
+            return null;
+        }
+
         $configuration = $this
             ->errorHandlerConfiguration
             ->findConfigurationForSite($currentSite, $requestHandler->getHttpRequest()->getUri(), $statusCode);

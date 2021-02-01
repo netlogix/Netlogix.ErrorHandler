@@ -5,10 +5,8 @@ namespace Netlogix\ErrorHandler\Handler;
 
 use Neos\Flow\Core\Bootstrap;
 use Neos\Flow\Error\ProductionExceptionHandler as FlowProductionExceptionHandler;
-use Neos\Flow\Http\HttpRequestHandlerInterface;
 use Neos\Flow\ObjectManagement\ObjectManagerInterface;
-use Neos\Neos\Domain\Repository\DomainRepository;
-use Netlogix\ErrorHandler\Configuration\ErrorHandlerConfiguration;
+use Netlogix\ErrorHandler\Service\ErrorPageResolver;
 
 class ProductionExceptionHandler extends FlowProductionExceptionHandler
 {
@@ -30,41 +28,14 @@ class ProductionExceptionHandler extends FlowProductionExceptionHandler
         return file_get_contents($errorPage);
     }
 
-    /**
-     * @param int $statusCode
-     * @return string|null
-     * @throws \Exception
-     */
-    protected function findErrorPageConfigurationForRequest(int $statusCode)
+    protected function findErrorPageConfigurationForRequest(int $statusCode): ?string
     {
         if (!Bootstrap::$staticObjectManager instanceof ObjectManagerInterface) {
             return null;
         }
+        $errorPageResolver = Bootstrap::$staticObjectManager->get(ErrorPageResolver::class);
 
-        $requestHandler = Bootstrap::$staticObjectManager->get(Bootstrap::class)->getActiveRequestHandler();
-        if (!$requestHandler instanceof HttpRequestHandlerInterface) {
-            return null;
-        }
-
-        $currentDomain = Bootstrap::$staticObjectManager->get(DomainRepository::class)->findOneByActiveRequest();
-
-        if (!$currentDomain) {
-            return null;
-        }
-
-        $currentSite = $currentDomain->getSite();
-        $errorHandlerConfiguration = Bootstrap::$staticObjectManager->get(ErrorHandlerConfiguration::class);
-        $configuration = $errorHandlerConfiguration->findConfigurationForSite($currentSite,
-            $requestHandler->getHttpRequest()->getUri(), $statusCode);
-
-        if (!$configuration) {
-            return null;
-        }
-
-        return $errorHandlerConfiguration->getDestinationForConfiguration(
-            $configuration,
-            $currentDomain->getSite()->getNodeName()
-        );
+        return $errorPageResolver->findErrorPageForCurrentRequestAndStatusCode($statusCode);
     }
 
 }

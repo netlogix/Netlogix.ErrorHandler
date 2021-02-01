@@ -1,0 +1,9 @@
+error = Neos.Fusion:Case {
+    nlxErrorHandler {
+        @position = 'before default'
+
+        errorPage = ${Netlogix.ErrorPageResolver.findErrorPageForCurrentRequestAndStatusCode(statusCode)}
+        condition = ${this.errorPage != null && File.exists(this.errorPage)}
+        renderer = ${File.readFile(this.errorPage)}
+    }
+}

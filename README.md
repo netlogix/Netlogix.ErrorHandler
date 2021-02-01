@@ -1,26 +1,58 @@
 # Netlogix ErrorHandler for Neos
 
+This package allows you to generate static error pages by using the content of Neos pages. These static files will
+be used for error handling in Flow & Neos depending on their configuration.
+
+You can also use these files as ErrorDocument in your webserver.
+
 ## Install package
 `composer require netlogix/errorhandler`
 
 ## Configuration
-Provide configuration for every site and status code
+Provide configuration for every site and status code you need:
 ```yaml
 Netlogix:
   ErrorHandler:
     pages:
-      'my-site':
+      # siteNodeName of all Sites that you want to generate error pages for
+
+      'my-site-without-dimensions':
         -
+          # The status codes this error page is generated for
+          matchingStatusCodes: [404, 410]
+
+          # Dimensions to use for this error page. Use empty array if no dimensions are configured
+          dimensions: []
+
+          # Node identifier of documentNode to use for rendering
+          source: '#550e8400-e29b-11d4-a716-446655440000'
+
+          # File path where this error page should be saved to. Available variables are site and dimensions
+          destination: '${"/var/www/default/mysite/errorpages/404.html"}'
+
+      'my-site-with-dimensions':
+        -
+          matchingStatusCodes: [500]
+
+          # The first path segment that determines the dimensions. Use empty string if no dimensions are configured
           dimensionPathSegment: 'en_US'
+
+          # Dimensions to use for this error page. Use empty array if no dimensions are configured
           dimensions:
             language: ['en_US', 'en']
-          matchingStatusCodes: [404, 500]
+
           source: '#550e8400-e29b-11d4-a716-446655440000'
           destination: '${"/var/www/default/" + site + "/" + dimensions + "/500.html"}'
 ```
 
 ## Generate error pages
 
+To generate the static error pages, run the following Flow command:
+
 ```bash
 ./flow errorpage:generate --verbose
 ```
+
+This will loop all error pages and download them to their destination. Depending on how
+often the content of the configured Neos pages changes, you might want to do this during deployment
+or periodically using a cronjob.

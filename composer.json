@@ -14,6 +14,9 @@
             "Netlogix\\ErrorHandler\\": "Classes/"
         }
     },
+    "suggest": {
+        "netlogix/sentry": "Log exceptions to sentry"
+    },
     "extra": {
         "neos": {
             "package-key": "Netlogix.ErrorHandler"

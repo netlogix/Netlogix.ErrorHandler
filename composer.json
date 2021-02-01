@@ -7,13 +7,15 @@
         "php": "~7.2",
         "ext-curl": "*",
         "guzzlehttp/guzzle": "~6.0 || ~7.0",
-        "neos/neos": "~5.0",
-        "networkteam/neos-sentryclient": "~4.0"
+        "neos/neos": "~5.0"
     },
     "autoload": {
         "psr-4": {
             "Netlogix\\ErrorHandler\\": "Classes/"
         }
+    },
+    "suggest": {
+        "netlogix/sentry": "Log exceptions to sentry"
     },
     "extra": {
         "neos": {

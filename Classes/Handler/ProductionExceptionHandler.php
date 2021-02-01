@@ -4,13 +4,13 @@ declare(strict_types=1);
 namespace Netlogix\ErrorHandler\Handler;
 
 use Neos\Flow\Core\Bootstrap;
+use Neos\Flow\Error\ProductionExceptionHandler as FlowProductionExceptionHandler;
 use Neos\Flow\Http\HttpRequestHandlerInterface;
 use Neos\Flow\ObjectManagement\ObjectManagerInterface;
 use Neos\Neos\Domain\Repository\DomainRepository;
 use Netlogix\ErrorHandler\Configuration\ErrorHandlerConfiguration;
-use Networkteam\SentryClient\Handler\ProductionExceptionHandler as SentryProductionExceptionHandler;
 
-class ProductionExceptionHandler extends SentryProductionExceptionHandler
+class ProductionExceptionHandler extends FlowProductionExceptionHandler
 {
 
     /**
@@ -54,7 +54,8 @@ class ProductionExceptionHandler extends SentryProductionExceptionHandler
 
         $currentSite = $currentDomain->getSite();
         $errorHandlerConfiguration = Bootstrap::$staticObjectManager->get(ErrorHandlerConfiguration::class);
-        $configuration = $errorHandlerConfiguration->findConfigurationForSite($currentSite, $requestHandler->getHttpRequest()->getUri(), $statusCode);
+        $configuration = $errorHandlerConfiguration->findConfigurationForSite($currentSite,
+            $requestHandler->getHttpRequest()->getUri(), $statusCode);
 
         if (!$configuration) {
             return null;

@@ -42,7 +42,7 @@ Netlogix:
             language: ['en_US', 'en']
 
           source: '#550e8400-e29b-11d4-a716-446655440000'
-          destination: '${"/var/www/default/" + site + "/" + dimensions + "/500.html"}'
+          destination: '${"%FLOW_PATH_DATA%Persistent/ErrorPages/" + site + "-" + dimensions + "-500.html"}'
 ```
 
 ## Generate error pages

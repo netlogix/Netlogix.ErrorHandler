@@ -67,4 +67,14 @@ class ProductionExceptionHandler extends FlowProductionExceptionHandler
         );
     }
 
+    /**
+     * Override new method introduced in Flow 6.3.16
+     *
+     * @return bool
+     */
+    protected function useCustomErrorView(): bool
+    {
+        return false;
+    }
+
 }

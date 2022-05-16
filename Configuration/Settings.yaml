@@ -3,11 +3,6 @@ Neos:
     error:
       exceptionHandler:
         renderingGroups:
-          notFoundExceptions:
-            options:
-              # Force static exception rendering.
-              templatePathAndFilename: null
-              viewClassName: Neos\FluidAdaptor\View\StandaloneView
           serverErrorExceptions:
             matchingStatusCodes: [ 500 ]
             options:

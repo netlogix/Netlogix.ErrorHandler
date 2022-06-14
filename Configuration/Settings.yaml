@@ -8,7 +8,6 @@ Neos:
             options:
               logException: true
 
-
 Netlogix:
   ErrorHandler:
 

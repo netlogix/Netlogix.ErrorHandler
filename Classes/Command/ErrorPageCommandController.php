@@ -20,6 +20,7 @@ use Neos\Neos\Service\LinkingService;
 use Neos\Utility\Files;
 use Netlogix\ErrorHandler\Configuration\ErrorHandlerConfiguration;
 use Netlogix\ErrorHandler\Service\ControllerContextFactory;
+use RuntimeException;
 use function dirname;
 use function fopen;
 use function is_dir;
@@ -84,6 +85,11 @@ class ErrorPageCommandController extends CommandController
             foreach ($configurations as $configuration) {
                 $site = $this->siteRepository->findOneByNodeName($siteNodeName);
                 assert($site instanceof Site);
+
+                if (!$site->isOnline()) {
+                    $verbose && $this->outputLine('Site %s is not online', [$siteNodeName]);
+                    continue;
+                }
                 try {
                     $requestUri = $this->getSiteUri($site, $configuration);
                 } catch (\Exception $e) {
@@ -132,7 +138,7 @@ class ErrorPageCommandController extends CommandController
     {
         $domain = $site->getPrimaryDomain();
         if (!$domain) {
-            $this->outputLine('Skipping %s as no primary domain is set.', [$site->getNodeName()]);
+            throw new RuntimeException(sprintf('Site %s has no primary domain', $site->getNodeName()), 1708944032);
         }
 
         $context = $this->getContextForSite($site, $domain, $configuration['dimensions']);

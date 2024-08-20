@@ -48,19 +48,54 @@ class ErrorHandlerConfiguration
     ) {
         $siteName = $site->getNodeName();
         $configurationsForSite = array_key_exists($siteName, $this->pages) ? $this->pages[$siteName] : [];
-        $dimensionPathSegment = current(explode('/', ltrim($uri->getPath() ?? '', '/'), 2));
+        $requestPath = ltrim($uri->getPath() ?? '', '/');
+        $requestedDimensionPathSegment = current(explode('/', $requestPath, 2));
 
         $matchingStatusCodes = array_filter($configurationsForSite,
-            function (array $configuration) use ($dimensionPathSegment, $statusCode) {
+            function (array $configuration) use ($statusCode) {
                 return in_array($statusCode, $configuration['matchingStatusCodes'] ?? [], true);
             });
 
         $matchingDimensions = array_filter($matchingStatusCodes,
-            function (array $configuration) use ($dimensionPathSegment, $statusCode) {
-                return ($configuration['dimensionPathSegment'] ?? '') === $dimensionPathSegment;
+            function (array $configuration) use ($requestedDimensionPathSegment) {
+                $dimensionPathSegment = $configuration['dimensionPathSegment'] ?? '';
+                if ($dimensionPathSegment === '' && empty($configuration['dimensions'] ?? [])) {
+                    return true;
+                }
+
+                return $dimensionPathSegment === $requestedDimensionPathSegment;
             });
 
-        return current($matchingDimensions) ?: current($matchingStatusCodes) ?: null;
+        $configurationWithPathPrefixes = array_filter($matchingDimensions,
+            function (array $configuration) {
+                return !empty($configuration['pathPrefixes'] ?? []);
+            });
+
+        $configurationsWithoutPathPrefixes = array_filter($matchingDimensions,
+            function (array $configuration) {
+                return empty($configuration['pathPrefixes'] ?? []);
+            });
+
+        if (!empty($configurationWithPathPrefixes)) {
+            $matchingPathPrefixes = array_filter($matchingDimensions,
+                function (array $configuration) use ($requestPath) {
+                    foreach ($configuration['pathPrefixes'] ?? [] as $pathPrefix) {
+                        if (strpos($requestPath, ltrim($pathPrefix, '/')) === 0) {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                });
+
+            if (empty($matchingPathPrefixes)) {
+                return current($configurationsWithoutPathPrefixes);
+            }
+
+            return current($matchingPathPrefixes);
+        }
+
+        return current($configurationsWithoutPathPrefixes) ?: current($matchingStatusCodes) ?: null;
     }
 
     /**

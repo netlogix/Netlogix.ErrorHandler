@@ -30,6 +30,22 @@ Netlogix:
           # File path where this error page should be saved to. Available variables are site and dimensions
           destination: '${"/var/www/default/mysite/errorpages/404.html"}'
 
+        -
+          # You can also configure path prefixes so some site areas have different error pages. Make sure to adjust the destination path accordingly.
+          pathPrefixes: ['/some-special-path']
+
+          # The status codes this error page is generated for
+          matchingStatusCodes: [404, 410]
+
+          # Dimensions to use for this error page. Use empty array if no dimensions are configured
+          dimensions: []
+
+          # Node identifier of documentNode to use for rendering
+          source: '#f7c8d757-391a-4a85-bdb5-81df56d5e2c0'
+
+          # File path where this error page should be saved to. Available variables are site and dimensions
+          destination: '${"/var/www/default/mysite/errorpages/404-some-special-path.html"}'
+
       'my-site-with-dimensions':
         -
           matchingStatusCodes: [500]

@@ -9,7 +9,35 @@ You can also use these files as ErrorDocument in your webserver.
 `composer require netlogix/errorhandler`
 
 ## Configuration
+
+### Option 1: Add error pages manually as document nodes.
+
+Create a custom document node, which uses the
+`Netlogix.ErrorHandler.NodeTypes:Mixin.ErrorPage` mixin.
+
+Every child page of this error page as well as child pages of siblings of
+this error age are covered by this error page.
+
+Every error counts for its exact dimension and for the error codes configured
+within that page node.
+
+A dynamic error page is omitted, if no error code is assigned.
+
+There still needs to be a storage folder where cached error pages will be
+placed.
+
+```yaml
+Netlogix:
+  ErrorHandler:
+
+    # File path where this error page should be saved to. Available variables are `site`, `dimensions` and `node`.
+    destination: '${"/var/www/default/" + site + "/" + dimensions + "/" + node + ".html"}'
+```
+
+### Option 2: Provide error pages via yaml
+
 Provide configuration for every site and status code you need:
+
 ```yaml
 Netlogix:
   ErrorHandler:
@@ -27,7 +55,7 @@ Netlogix:
           # Node identifier of documentNode to use for rendering
           source: '#550e8400-e29b-11d4-a716-446655440000'
 
-          # File path where this error page should be saved to. Available variables are site and dimensions
+          # File path where this error page should be saved to. Available variables are `site` and `dimensions`
           destination: '${"/var/www/default/mysite/errorpages/404.html"}'
 
         -
@@ -72,3 +100,13 @@ To generate the static error pages, run the following Flow command:
 This will loop all error pages and download them to their destination. Depending on how
 often the content of the configured Neos pages changes, you might want to do this during deployment
 or periodically using a cronjob.
+
+## Show current configuration
+
+```bash
+./flow errorpage:showconfiguration
+```
+
+This call responds in YAML format, although not all settings are actually
+given in YAML settings. Instead, the result will be the merged result of both,
+YAML configuration and node based configuration.

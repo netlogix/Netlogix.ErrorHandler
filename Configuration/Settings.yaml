@@ -13,6 +13,8 @@ Neos:
 Netlogix:
   ErrorHandler:
 
+    destination: '${"/var/www/default/" + site + "/" + dimensions + "/" + node + ".html"}'
+
     pages: []
 
 #      'my-site':

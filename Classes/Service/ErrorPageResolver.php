@@ -31,14 +31,21 @@ class ErrorPageResolver implements ProtectedContextAwareInterface
      */
     protected $domainRepository;
 
+    /**
+     * @var DestinationResolver
+     */
+    protected $destinationResolver;
+
     public function __construct(
         ErrorHandlerConfiguration $errorHandlerConfiguration,
         Bootstrap $bootstrap,
-        DomainRepository $domainRepository
+        DomainRepository $domainRepository,
+        DestinationResolver $destinationResolver
     ) {
         $this->errorHandlerConfiguration = $errorHandlerConfiguration;
         $this->bootstrap = $bootstrap;
         $this->domainRepository = $domainRepository;
+        $this->destinationResolver = $destinationResolver;
     }
 
     public function findErrorPageForCurrentRequestAndStatusCode(int $statusCode): ?string
@@ -67,7 +74,7 @@ class ErrorPageResolver implements ProtectedContextAwareInterface
         }
 
         try {
-            return $this->errorHandlerConfiguration->getDestinationForConfiguration(
+            return $this->destinationResolver->getDestinationForConfiguration(
                 $configuration,
                 $currentDomain->getSite()->getNodeName()
             );

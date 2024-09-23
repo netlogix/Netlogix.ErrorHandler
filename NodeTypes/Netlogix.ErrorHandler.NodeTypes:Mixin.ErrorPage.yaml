@@ -5,6 +5,21 @@
     label: 'Error Page'
     icon: 'bug'
 
+    inspector:
+      views:
+        errorPageTarget:
+          label: 'Error Page'
+          group: 'nodeInfo'
+          position: 100
+          # The colum Views uses a huge font size, unfortunately
+          view: 'Neos.Neos/Inspector/Views/Data/TableView'
+          viewOptions:
+            dataSource: 'netlogix-errorhandler-errorpage-view'
+            collection: 'rows'
+            columns:
+              -
+                data: destination
+
   properties:
 
     matchingStatusCodes:

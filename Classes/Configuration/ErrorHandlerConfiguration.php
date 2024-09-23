@@ -19,7 +19,6 @@ use function current;
 use function explode;
 use function in_array;
 use function iterator_to_array;
-use function preg_match;
 
 /**
  * @Flow\Scope("singleton")
@@ -147,32 +146,6 @@ class ErrorHandlerConfiguration
     protected function evaluateEelExpression(string $expression, array $context)
     {
         return EelUtility::evaluateEelExpression($expression, $this->eelEvaluator, $context, []);
-    }
-
-    /**
-     * @param array $config
-     * @param string $siteNodeName
-     * @return string
-     * @throws \Neos\Eel\Exception
-     */
-    public function getDestinationForConfiguration(
-        array $config,
-        string $siteNodeName
-    ): string {
-        $dimensionPathSegment = $config['dimensionPathSegment'] ?? '';
-        $nodeIdentifier = preg_match(
-            '/^#([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/',
-            $config['source'] ?? '',
-            $matches
-        )
-            ? $matches[1]
-            : null;
-
-        return $this->evaluateEelExpression($config['destination'], [
-            'site' => $siteNodeName,
-            'dimensions' => $dimensionPathSegment,
-            'node' => $nodeIdentifier,
-        ]);
     }
 
     /**

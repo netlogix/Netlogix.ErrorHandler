@@ -95,14 +95,7 @@ class NodeBasedConfiguration
             foreach ($errorNodes as $errorNode) {
                 assert($errorNode instanceof NodeInterface);
                 try {
-                    $errorNodeConfiguration = [
-                        'matchingStatusCodes' => $this->extractStatusCodes($errorNode),
-                        'dimensions' => $this->extractDimensions($errorNode),
-                        'dimensionPathSegment' => $this->extractDimensionsPathSegment($errorNode),
-                        'source' => '#' . $errorNode->getIdentifier(),
-                        'destination' => $this->destination,
-                        'pathPrefixes' => $this->extractPathPrefixes($errorNode),
-                    ];
+                    $errorNodeConfiguration = $this->getErrorNodeConfiguration($errorNode);
                     $configurationsForSite[$sitename][json_encode($errorNodeConfiguration)] = $errorNodeConfiguration;
                 } catch (Exception $e) {
                     // This is used for creating error pages.
@@ -114,6 +107,18 @@ class NodeBasedConfiguration
         }
 
         return $configurationsForSite;
+    }
+
+    public function getErrorNodeConfiguration(NodeInterface $errorNode): array
+    {
+        return [
+            'matchingStatusCodes' => $this->extractStatusCodes($errorNode),
+            'dimensions' => $this->extractDimensions($errorNode),
+            'dimensionPathSegment' => $this->extractDimensionsPathSegment($errorNode),
+            'source' => '#' . $errorNode->getIdentifier(),
+            'destination' => $this->destination,
+            'pathPrefixes' => $this->extractPathPrefixes($errorNode),
+        ];
     }
 
     /**

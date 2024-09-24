@@ -20,7 +20,10 @@ use Neos\Neos\Service\LinkingService;
 use Neos\Utility\Files;
 use Netlogix\ErrorHandler\Configuration\ErrorHandlerConfiguration;
 use Netlogix\ErrorHandler\Service\ControllerContextFactory;
+use Netlogix\ErrorHandler\Service\DestinationResolver;
 use RuntimeException;
+use Symfony\Component\Yaml\Yaml;
+
 use function dirname;
 use function fopen;
 use function is_dir;
@@ -43,6 +46,12 @@ class ErrorPageCommandController extends CommandController
      * @var ErrorHandlerConfiguration
      */
     protected $configuration;
+
+    /**
+     * @Flow\Inject
+     * @var DestinationResolver
+     */
+    protected $destinationResolver;
 
     /**
      * @Flow\Inject
@@ -106,7 +115,7 @@ class ErrorPageCommandController extends CommandController
                     continue;
                 }
 
-                $destination = $this->configuration->getDestinationForConfiguration($configuration, $siteNodeName);
+                $destination = $this->destinationResolver->getDestinationForConfiguration($configuration, $siteNodeName);
                 $directory = dirname($destination);
                 if (!is_dir($directory)) {
                     try {
@@ -126,6 +135,25 @@ class ErrorPageCommandController extends CommandController
         if ($hadError) {
             $this->sendAndExit(1);
         }
+    }
+
+    /**
+     * Export current error page configuration in YAML format.
+     * This combines both, Node Type based settings, and YAML based settings.
+     *
+     * @param bool $verbose
+     * @throws \Exception
+     */
+    public function showConfigurationCommand()
+    {
+        $result = [
+            'Neltogix' => [
+                'ErrorHandler' => [
+                    'pages' => $this->configuration->getConfiguration()
+              ]
+            ]
+        ];
+        $this->output(Yaml::dump($result, 10, 2));
     }
 
     /**

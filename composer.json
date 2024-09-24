@@ -8,7 +8,8 @@
         "ext-curl": "*",
         "guzzlehttp/guzzle": "~6.0 || ~7.0",
         "neos/neos": "^7.3 || ^8.0",
-        "neos/flow": "^7.3.2 || ^8.0"
+        "neos/flow": "^7.3.2 || ^8.0",
+        "symfony/yaml": "^5.1"
     },
     "autoload": {
         "psr-4": {

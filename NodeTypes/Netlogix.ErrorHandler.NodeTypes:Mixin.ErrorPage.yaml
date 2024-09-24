@@ -1,0 +1,125 @@
+'Netlogix.ErrorHandler.NodeTypes:Mixin.ErrorPage':
+  abstract: true
+
+  ui:
+    label: 'Error Page'
+    icon: 'bug'
+
+    inspector:
+      views:
+        errorPageTarget:
+          label: 'Error Page'
+          group: 'nodeInfo'
+          position: 100
+          # The colum Views uses a huge font size, unfortunately
+          view: 'Neos.Neos/Inspector/Views/Data/TableView'
+          viewOptions:
+            dataSource: 'netlogix-errorhandler-errorpage-view'
+            collection: 'rows'
+            columns:
+              -
+                data: destination
+
+  properties:
+
+    matchingStatusCodes:
+      type: array
+      defaultValue:
+        - '400'
+        - '401'
+        - '403'
+        - '404'
+        - '410'
+      ui:
+        label: 'Matching Status Codes'
+        inspector:
+          group: 'document'
+          editor: 'Neos.Neos/Inspector/Editors/SelectBoxEditor'
+          editorOptions:
+            allowEmpty: true
+            placeholder: 'Select HTTP Status Codes'
+            multiple: true
+
+            values:
+
+              '400':
+                label: '400 - Bad Request'
+              '401':
+                label: '401 - Unauthorized'
+              '402':
+                label: '402 - Payment Required'
+              '403':
+                label: '403 - Forbidden'
+              '404':
+                label: '404 - Not Found'
+              '405':
+                label: '405 - Method Not Allowed'
+              '406':
+                label: '406 - Not Acceptable'
+#              '407':
+#                label: '407 - Proxy Authentication Required'
+              '408':
+                label: '408 - Request Timeout'
+              '409':
+                label: '409 - Conflict'
+              '410':
+                label: '410 - Gone'
+#              '411':
+#                label: '411 - Length Required'
+#              '412':
+#                label: '412 - Precondition Failed'
+#              '413':
+#                label: '413 - Payload Too Large'
+#              '414':
+#                label: '414 - URI Too Long'
+              '415':
+                label: '415 - Unsupported Media Type'
+#              '416':
+#                label: '416 - Range Not Satisfiable'
+#              '417':
+#                label: '417 - Expectation Failed'
+#              '418':
+#                label: '418 - I''m a teapot'
+#              '421':
+#                label: '421 - Misdirected Request'
+              '422':
+                label: '422 - Unprocessable Entity'
+#              '423':
+#                label: '423 - Locked'
+#              '424':
+#                label: '424 - Failed Dependency'
+#              '425':
+#                label: '425 - Too Early'
+#              '426':
+#                label: '426 - Upgrade Required'
+              '428':
+                label: '428 - Precondition Required'
+#              '429':
+#                label: '429 - Too Many Requests'
+#              '431':
+#                label: '431 - Request Header Fields Too Large'
+              '451':
+                label: '451 - Unavailable For Legal Reasons'
+
+              '500':
+                label: '500 - Internal Server Error'
+              '501':
+                label: '501 - Not Implemented'
+#              '502':
+#                label: '502 - Bad Gateway'
+              '503':
+                label: '503 - Service Unavailable'
+#              '504':
+#                label: '504 - Gateway Timeout'
+#              '505':
+#                label: '505 - HTTP Version Not Supported'
+#              '506':
+#                label: '506 - Variant Also Negotiates'
+#              '507':
+#                label: '507 - Insufficient Storage'
+#              '508':
+#                label: '508 - Loop Detected'
+#              '510':
+#                label: '510 - Not Extended'
+#              '511':
+#                label: '511 - Network Authentication Required'

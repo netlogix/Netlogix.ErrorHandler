@@ -6,6 +6,11 @@
     icon: 'bug'
 
     inspector:
+      groups:
+        errorPage:
+          label: 'Error Page'
+          icon: 'bug'
+          position: 'after document'
       views:
         errorPageTarget:
           label: 'Error Page'
@@ -33,7 +38,7 @@
       ui:
         label: 'Matching Status Codes'
         inspector:
-          group: 'document'
+          group: 'errorPage'
           editor: 'Neos.Neos/Inspector/Editors/SelectBoxEditor'
           editorOptions:
             allowEmpty: true

@@ -147,7 +147,7 @@ class ErrorPageCommandController extends CommandController
     public function showConfigurationCommand()
     {
         $result = [
-            'Neltogix' => [
+            'Netlogix' => [
                 'ErrorHandler' => [
                     'pages' => $this->configuration->getConfiguration()
               ]

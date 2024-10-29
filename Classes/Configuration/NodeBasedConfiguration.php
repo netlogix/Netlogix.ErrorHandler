@@ -103,6 +103,9 @@ class NodeBasedConfiguration
                     $this->throwableStorage->logThrowable($e);
                 }
             }
+
+            usort($configurationsForSite[$sitename], fn($a, $b) => $a['position'] <=> $b['position']);
+            $configurationsForSite[$sitename] = array_map(fn($item) => array_diff_key($item, ['position' => 0]), $configurationsForSite[$sitename]);
             $configurationsForSite[$sitename] = array_values($configurationsForSite[$sitename]);
         }
 
@@ -111,13 +114,20 @@ class NodeBasedConfiguration
 
     public function getErrorNodeConfiguration(NodeInterface $errorNode): array
     {
+        $pathPrefixes = $this->extractPathPrefixes($errorNode);
+        $position = 1000;
+        foreach ($pathPrefixes as $pathPrefix) {
+            $position -= strlen($pathPrefix);
+        }
+
         return [
             'matchingStatusCodes' => $this->extractStatusCodes($errorNode),
             'dimensions' => $this->extractDimensions($errorNode),
             'dimensionPathSegment' => $this->extractDimensionsPathSegment($errorNode),
             'source' => '#' . $errorNode->getIdentifier(),
             'destination' => $this->destination,
-            'pathPrefixes' => $this->extractPathPrefixes($errorNode),
+            'pathPrefixes' => $pathPrefixes,
+            'position' => $position,
         ];
     }
 

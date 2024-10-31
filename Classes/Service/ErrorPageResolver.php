@@ -7,45 +7,23 @@ use Neos\Eel\ProtectedContextAwareInterface;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Core\Bootstrap;
 use Neos\Flow\Http\HttpRequestHandlerInterface;
+use Neos\Flow\Log\ThrowableStorageInterface;
 use Neos\Neos\Domain\Repository\DomainRepository;
 use Netlogix\ErrorHandler\Configuration\ErrorHandlerConfiguration;
+use Throwable;
 
 /**
  * @Flow\Scope("singleton")
  */
 class ErrorPageResolver implements ProtectedContextAwareInterface
 {
-
-    /**
-     * @var ErrorHandlerConfiguration
-     */
-    protected $errorHandlerConfiguration;
-
-    /**
-     * @var Bootstrap
-     */
-    private $bootstrap;
-
-    /**
-     * @var DomainRepository
-     */
-    protected $domainRepository;
-
-    /**
-     * @var DestinationResolver
-     */
-    protected $destinationResolver;
-
     public function __construct(
-        ErrorHandlerConfiguration $errorHandlerConfiguration,
-        Bootstrap $bootstrap,
-        DomainRepository $domainRepository,
-        DestinationResolver $destinationResolver
+        protected ErrorHandlerConfiguration $errorHandlerConfiguration,
+        protected Bootstrap $bootstrap,
+        protected DomainRepository $domainRepository,
+        protected DestinationResolver $destinationResolver,
+        protected ThrowableStorageInterface $throwableStorage,
     ) {
-        $this->errorHandlerConfiguration = $errorHandlerConfiguration;
-        $this->bootstrap = $bootstrap;
-        $this->domainRepository = $domainRepository;
-        $this->destinationResolver = $destinationResolver;
     }
 
     public function findErrorPageForCurrentRequestAndStatusCode(int $statusCode): ?string
@@ -67,7 +45,7 @@ class ErrorPageResolver implements ProtectedContextAwareInterface
 
         $configuration = $this
             ->errorHandlerConfiguration
-            ->findConfigurationForSite($currentSite, $requestHandler->getHttpRequest()->getUri(), $statusCode);
+            ->findConfigurationForSite($currentSite, $requestHandler->getHttpRequest(), $statusCode);
 
         if (!$configuration) {
             return null;
@@ -76,9 +54,10 @@ class ErrorPageResolver implements ProtectedContextAwareInterface
         try {
             return $this->destinationResolver->getDestinationForConfiguration(
                 $configuration,
-                $currentDomain->getSite()->getNodeName()
+                (string)$currentDomain->getSite()->getNodeName()
             );
-        } catch (\Throwable $t) {
+        } catch (Throwable $t) {
+            $this->throwableStorage->logThrowable($t);
         }
 
         return null;

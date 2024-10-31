@@ -5,22 +5,27 @@ namespace Netlogix\ErrorHandler\Command;
 
 use GuzzleHttp\Client;
 use GuzzleHttp\Psr7\StreamWrapper;
-use GuzzleHttp\Psr7\Uri;
-use Neos\ContentRepository\Domain\Model\NodeInterface;
-use Neos\ContentRepository\Domain\Service\Context;
+use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
+use Neos\ContentRepository\Core\Feature\SubtreeTagging\Dto\SubtreeTag;
+use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
+use Neos\ContentRepository\Core\SharedModel\Node\NodeAddress;
+use Neos\ContentRepository\Core\SharedModel\Node\NodeAggregateId;
+use Neos\ContentRepository\Core\SharedModel\Workspace\WorkspaceName;
+use Neos\ContentRepositoryRegistry\ContentRepositoryRegistry;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Cli\CommandController;
 use Neos\Flow\Core\Bootstrap;
-use Neos\Neos\Controller\Exception\NodeNotFoundException;
-use Neos\Neos\Domain\Model\Domain;
 use Neos\Neos\Domain\Model\Site;
 use Neos\Neos\Domain\Repository\SiteRepository;
-use Neos\Neos\Domain\Service\ContentContextFactory;
-use Neos\Neos\Service\LinkingService;
+use Neos\Neos\FrontendRouting\Exception\NodeNotFoundException;
+use Neos\Neos\FrontendRouting\NodeUriBuilderFactory;
+use Neos\Neos\FrontendRouting\Options;
+use Neos\Neos\FrontendRouting\SiteDetection\SiteDetectionResult;
 use Neos\Utility\Files;
 use Netlogix\ErrorHandler\Configuration\ErrorHandlerConfiguration;
-use Netlogix\ErrorHandler\Service\ControllerContextFactory;
+use Netlogix\ErrorHandler\Service\ActionRequestFactory;
 use Netlogix\ErrorHandler\Service\DestinationResolver;
+use Psr\Http\Message\UriInterface;
 use RuntimeException;
 use Symfony\Component\Yaml\Yaml;
 
@@ -35,47 +40,26 @@ use function stream_copy_to_stream;
 class ErrorPageCommandController extends CommandController
 {
 
-    /**
-     * @Flow\Inject
-     * @var Bootstrap
-     */
-    protected $bootstrap;
+    #[Flow\Inject]
+    protected Bootstrap $bootstrap;
 
-    /**
-     * @Flow\Inject
-     * @var ErrorHandlerConfiguration
-     */
-    protected $configuration;
+    #[Flow\Inject]
+    protected ErrorHandlerConfiguration $configuration;
 
-    /**
-     * @Flow\Inject
-     * @var DestinationResolver
-     */
-    protected $destinationResolver;
+    #[Flow\Inject]
+    protected DestinationResolver $destinationResolver;
 
-    /**
-     * @Flow\Inject
-     * @var SiteRepository
-     */
-    protected $siteRepository;
+    #[Flow\Inject]
+    protected SiteRepository $siteRepository;
 
-    /**
-     * @Flow\Inject
-     * @var ContentContextFactory
-     */
-    protected $contentContextFactory;
+    #[Flow\Inject]
+    protected NodeUriBuilderFactory $nodeUriBuilderFactory;
 
-    /**
-     * @Flow\Inject
-     * @var LinkingService
-     */
-    protected $linkingService;
+    #[Flow\Inject]
+    protected ContentRepositoryRegistry $contentRepositoryRegistry;
 
-    /**
-     * @Flow\Inject
-     * @var ControllerContextFactory
-     */
-    protected $controllerContextFactory;
+    #[Flow\Inject]
+    protected ActionRequestFactory $actionRequestFactory;
 
     /**
      * Generate Error Pages for configured Sites
@@ -144,7 +128,7 @@ class ErrorPageCommandController extends CommandController
      * @param bool $verbose
      * @throws \Exception
      */
-    public function showConfigurationCommand()
+    public function showConfigurationCommand(): void
     {
         $result = [
             'Netlogix' => [
@@ -156,73 +140,35 @@ class ErrorPageCommandController extends CommandController
         $this->output(Yaml::dump($result, 10, 2));
     }
 
-    /**
-     * @param Site $site
-     * @param array $configuration
-     * @return Uri
-     * @throws NodeNotFoundException
-     */
-    protected function getSiteUri(Site $site, array $configuration)
+    protected function getSiteUri(Site $site, array $configuration): UriInterface
     {
         $domain = $site->getPrimaryDomain();
         if (!$domain) {
             throw new RuntimeException(sprintf('Site %s has no primary domain', $site->getNodeName()), 1708944032);
         }
 
-        $context = $this->getContextForSite($site, $domain, $configuration['dimensions']);
-        $source = $context->getNodeByIdentifier(substr($configuration['source'], 1));
+        $contentRepository = $this->contentRepositoryRegistry->get($site->getConfiguration()->contentRepositoryId);
+        $contentGraph = $contentRepository->getContentGraph(WorkspaceName::fromString(WorkspaceName::WORKSPACE_NAME_LIVE));
 
-        if (!$source instanceof NodeInterface) {
-            throw new NodeNotFoundException('Could not get source node in site ' . $site->getNodeName(), 1552492278);
-        }
+        $nodeAggregate = $contentGraph->findNodeAggregateById(NodeAggregateId::fromString(substr($configuration['source'], 1)));
+        $dimensionSpacePoint = DimensionSpacePoint::fromJsonString(json_encode($configuration['dimensions']));
+
+        $source = $nodeAggregate->getNodeByCoveredDimensionSpacePoint($dimensionSpacePoint);
 
         if (!$this->isNodeVisible($source)) {
-            throw new NodeNotFoundException('Node for site ' . $site->getNodeName() . ' is not visible', 1552492532);
+            throw new NodeNotFoundException('Node ' . $source->aggregateId . ' is not visible', 1552492532);
         }
 
-        $controllerContext = $this->controllerContextFactory->buildControllerContext(new Uri($domain->__toString()));
-        $nodeUri = $this->linkingService->createNodeUri($controllerContext, $source, null, null, true);
+        $siteDetectionResult = SiteDetectionResult::create($site->getNodeName(), $contentRepository->id);
+        $actionRequest = $this->actionRequestFactory->buildActionRequest($siteDetectionResult);
+        $nodeUriBuilder = $this->nodeUriBuilderFactory->forActionRequest($actionRequest);
 
-        return new Uri($nodeUri);
+        return $nodeUriBuilder->uriFor(NodeAddress::fromNode($source), Options::createForceAbsolute());
     }
 
-    /**
-     * @param NodeInterface $node
-     * @return bool
-     */
-    protected function isNodeVisible(NodeInterface $node): bool
+    protected function isNodeVisible(Node $node): bool
     {
-        $currentNode = $node;
-
-        do {
-            if (!$currentNode->isVisible()) {
-                return false;
-            }
-
-            $currentNode = $currentNode->getParent();
-        } while ($currentNode !== null);
-
-        return true;
-    }
-
-    /**
-     * @param Site $site
-     * @param Domain $domain
-     * @param array $dimensions
-     * @return Context
-     */
-    protected function getContextForSite(Site $site, Domain $domain, array $dimensions): Context
-    {
-        return $this->contentContextFactory->create([
-            'workspaceName' => 'live',
-            'targetDimensions' => array_map(function (array $dimensionValues) {
-                return current($dimensionValues);
-            }, $dimensions),
-            'dimensions' => $dimensions,
-            'currentSite' => $site,
-            'currentDomain' => $domain,
-            'invisibleContentShown' => true
-        ]);
+        return !$node->tags->contain(SubtreeTag::disabled());
     }
 
 }

@@ -6,18 +6,26 @@ namespace Netlogix\ErrorHandler\Configuration;
 
 use Exception;
 use Generator;
-use GuzzleHttp\Psr7\Uri;
-use Neos\ContentRepository\Domain\Model\NodeInterface;
-use Neos\ContentRepository\Domain\Service\ContentDimensionCombinator;
-use Neos\ContentRepository\Domain\Service\ContentDimensionPresetSourceInterface;
-use Neos\ContentRepository\Domain\Service\ContextFactoryInterface;
+use Neos\ContentRepository\Core\ContentRepository;
+use Neos\ContentRepository\Core\Dimension\ContentDimension;
+use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
+use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindChildNodesFilter;
+use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindRootNodeAggregatesFilter;
+use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
+use Neos\ContentRepository\Core\Projection\ContentGraph\VisibilityConstraints;
+use Neos\ContentRepository\Core\SharedModel\Node\NodeAddress;
+use Neos\ContentRepository\Core\SharedModel\Workspace\WorkspaceName;
+use Neos\ContentRepositoryRegistry\ContentRepositoryRegistry;
 use Neos\Eel\FlowQuery\FlowQuery;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Log\ThrowableStorageInterface;
-use Neos\Neos\Domain\Service\ContentContext;
-use Neos\Neos\Service\LinkingService;
-use Netlogix\ErrorHandler\Service\ControllerContextFactory;
 
+use Neos\Neos\Domain\Model\Site;
+use Neos\Neos\Domain\Model\SiteNodeName;
+use Neos\Neos\Domain\Repository\SiteRepository;
+use Neos\Neos\FrontendRouting\NodeUriBuilderFactory;
+use Neos\Neos\FrontendRouting\SiteDetection\SiteDetectionResult;
+use Netlogix\ErrorHandler\Service\ActionRequestFactory;
 use RuntimeException;
 
 use function array_map;
@@ -33,46 +41,23 @@ use function json_encode;
  */
 class NodeBasedConfiguration
 {
-    /**
-     * @Flow\Inject(lazy=false)
-     * @var ContextFactoryInterface
-     */
-    protected ContextFactoryInterface $contextFactory;
-
-    /**
-     * @Flow\Inject(lazy=false)
-     * @var LinkingService
-     */
-    protected LinkingService $linkingService;
-
-    /**
-     * @Flow\Inject(lazy=false)
-     * @var ControllerContextFactory
-     */
-    protected ControllerContextFactory $controllerContextFactory;
-
-    /**
-     * @Flow\Inject(lazy=false)
-     * @var ContentDimensionPresetSourceInterface
-     */
-    protected ContentDimensionPresetSourceInterface $contentDimensionPresetSource;
-
-    /**
-     * @Flow\Inject(lazy=false)
-     * @var ContentDimensionCombinator
-     */
-    protected ContentDimensionCombinator $contentDimensionCombinator;
-
-    /**
-     * @Flow\Inject(lazy=false)
-     * @var ThrowableStorageInterface
-     */
+    #[Flow\Inject]
     protected ThrowableStorageInterface $throwableStorage;
 
-    /**
-     * @Flow\InjectConfiguration(path="destination")
-     */
+    #[Flow\InjectConfiguration(path: 'destination')]
     protected string $destination;
+
+    #[Flow\Inject]
+    protected ContentRepositoryRegistry $contentRepositoryRegistry;
+
+    #[Flow\Inject]
+    protected NodeUriBuilderFactory $nodeUriBuilderFactory;
+
+    #[Flow\Inject]
+    protected SiteRepository $siteRepository;
+
+    #[Flow\Inject]
+    protected ActionRequestFactory $actionRequestFactory;
 
     /**
      * @return array<string, SiteConfiguration[]>
@@ -81,11 +66,12 @@ class NodeBasedConfiguration
     {
         $configurationsForSite = [];
         $siteNodes = $this->getSiteNodes();
-        $siteNodes = iterator_to_array($siteNodes, false);
-        foreach ($siteNodes as $siteNode) {
-            assert($siteNode instanceof NodeInterface);
 
-            $sitename = (string)$siteNode->getNodeName();
+        foreach ($siteNodes as $siteNodeName => $siteNode) {
+            assert($siteNodeName instanceof SiteNodeName);
+            assert($siteNode instanceof Node);
+
+            $sitename = (string)$siteNode->name;
             $configurationsForSite[$sitename] = $configurationsForSite[$sitename] ?? [];
 
             $errorNodes = FlowQuery::q($siteNode)
@@ -93,28 +79,28 @@ class NodeBasedConfiguration
                 ->get();
 
             foreach ($errorNodes as $errorNode) {
-                assert($errorNode instanceof NodeInterface);
+                assert($errorNode instanceof Node);
                 try {
-                    $errorNodeConfiguration = $this->getErrorNodeConfiguration($errorNode);
+                    $errorNodeConfiguration = $this->getErrorNodeConfiguration($siteNodeName, $errorNode);
                     $configurationsForSite[$sitename][json_encode($errorNodeConfiguration)] = $errorNodeConfiguration;
                 } catch (Exception $e) {
                     // This is used for creating error pages.
                     // One faulty error page config must not prevent other error pages from being rendered.
                     $this->throwableStorage->logThrowable($e);
+                    continue;
                 }
             }
 
             usort($configurationsForSite[$sitename], fn($a, $b) => $a['position'] <=> $b['position']);
-            $configurationsForSite[$sitename] = array_map(fn($item) => array_diff_key($item, ['position' => 0]), $configurationsForSite[$sitename]);
             $configurationsForSite[$sitename] = array_values($configurationsForSite[$sitename]);
         }
 
-        return $configurationsForSite;
+        return array_filter($configurationsForSite);
     }
 
-    public function getErrorNodeConfiguration(NodeInterface $errorNode): array
+    public function getErrorNodeConfiguration(SiteNodeName $siteNodeName, Node $errorNode): array
     {
-        $pathPrefixes = $this->extractPathPrefixes($errorNode);
+        $pathPrefixes = $this->extractPathPrefixes($siteNodeName, $errorNode);
         $position = 1000;
         foreach ($pathPrefixes as $pathPrefix) {
             $position -= strlen($pathPrefix);
@@ -122,9 +108,8 @@ class NodeBasedConfiguration
 
         return [
             'matchingStatusCodes' => $this->extractStatusCodes($errorNode),
-            'dimensions' => $this->extractDimensions($errorNode),
-            'dimensionPathSegment' => $this->extractDimensionsPathSegment($errorNode),
-            'source' => '#' . $errorNode->getIdentifier(),
+            'dimensions' => json_decode($errorNode->dimensionSpacePoint->toJson(), true),
+            'source' => '#' . $errorNode->aggregateId,
             'destination' => $this->destination,
             'pathPrefixes' => $pathPrefixes,
             'position' => $position,
@@ -135,40 +120,77 @@ class NodeBasedConfiguration
      * Returns all NodeInterface Site node objects currently
      * known to the ContentRepository context.
      *
-     * @return Generator<NodeInterface>
+     * @return Generator<SiteNodeName, Node>
      */
-    protected function getSiteNodes()
+    protected function getSiteNodes(): iterable
     {
-        $currentContexts = $this->getContentContexts();
-        foreach ($currentContexts as $contextContext) {
-            $rootNode = $contextContext->getRootNode();
-            $sitesCollections = $rootNode->findChildNodes();
-            foreach ($sitesCollections as $sitesCollection) {
-                yield from $sitesCollection->findChildNodes();
+        $sites = $this->siteRepository->findOnline();
+
+        foreach ($sites as $site) {
+            assert($site instanceof Site);
+
+            $contentRepository = $this->contentRepositoryRegistry->get($site->getConfiguration()->contentRepositoryId);
+            $contentGraph = $contentRepository->getContentGraph(WorkspaceName::fromString(WorkspaceName::WORKSPACE_NAME_LIVE));
+            $rootNodeAggregates = $contentGraph->findRootNodeAggregates(FindRootNodeAggregatesFilter::create(nodeTypeName: 'Neos.Neos:Sites'));
+
+            if ($rootNodeAggregates->count() !== 1) {
+                throw new RuntimeException('Expected exactly one root node aggregate for the site.', 1730410697);
+            }
+            $rootNodeAggregate = $rootNodeAggregates->first();
+
+            foreach ($this->combineAllDimensionSpacePoints($contentRepository) as $dimensionSpacePoint) {
+                $subgraph = $contentGraph->getSubgraph(
+                    $dimensionSpacePoint,
+                    VisibilityConstraints::frontend()
+                );
+
+                $children = $subgraph->findChildNodes(
+                    $rootNodeAggregate->nodeAggregateId,
+                    FindChildNodesFilter::create(
+                        nodeTypes: 'Neos.Neos:Site'
+                    )
+                );
+
+                foreach ($children as $child) {
+                    yield $site->getNodeName() => $child;
+                }
             }
         }
     }
 
     /**
-     * Map every dimension combination to a corresponding content context.
-     *
-     * @return ContentContext[]
+     * @param ContentRepository $contentRepository
+     * @return iterable<int, DimensionSpacePoint>
      */
-    protected function getContentContexts(): array
+    protected function combineAllDimensionSpacePoints(ContentRepository $contentRepository): iterable
     {
-        $dimensionCombinations = $this->contentDimensionCombinator->getAllAllowedCombinations();
-        foreach ($dimensionCombinations as $dimensionCombination) {
-            $context = $this->contextFactory->create(['dimensions' => $dimensionCombination]);
-            assert($context instanceof ContentContext);
-            $contentContextsByDimension[json_encode($dimensionCombination)] = $context;
+        $contentDimensions = $contentRepository->getContentDimensionSource()->getContentDimensionsOrderedByPriority();
+        $combinations = [];
+
+        foreach ($contentDimensions as $contentDimension) {
+            assert($contentDimension instanceof ContentDimension);
+
+            foreach ($contentDimension->values as $contentDimensionValue) {
+                foreach ($contentDimensions as $otherContentDimension) {
+                    foreach ($otherContentDimension->values as $otherContentDimensionValue) {
+                        $coordinates = array_merge(
+                            [(string)$contentDimension->id->jsonSerialize() => $contentDimensionValue->value],
+                            [(string)$otherContentDimension->id->jsonSerialize() => $otherContentDimensionValue->value]
+                        );
+                        ksort($coordinates);
+                        $combinations[sha1(join('', $coordinates))] = DimensionSpacePoint::fromArray($coordinates);
+                    }
+                }
+            }
         }
-        return array_values($contentContextsByDimension);
+
+        return array_values($combinations);
     }
 
     /**
      * @return int[]
      */
-    protected function extractStatusCodes(NodeInterface $errorNode): array
+    protected function extractStatusCodes(Node $errorNode): array
     {
         $matchingStatusCodes = $errorNode->getProperty('matchingStatusCodes');
         if (is_array($matchingStatusCodes) && count($matchingStatusCodes) > 0) {
@@ -182,32 +204,20 @@ class NodeBasedConfiguration
     }
 
     /**
-     * @return array<string, string[]>
-     */
-    protected function extractDimensions(NodeInterface $errorNode): array
-    {
-        // @phpstan-ignore-next-line
-        return $errorNode->getDimensions();
-    }
-
-    protected function extractDimensionsPathSegment(NodeInterface $errorNode): string
-    {
-        $result = [];
-        foreach ($errorNode->getDimensions() as $singleDimensionValues) {
-            foreach ($singleDimensionValues as $singleDimensionValue) {
-                $result[] = $singleDimensionValue;
-            }
-        }
-        return join('-', $result);
-    }
-
-    /**
      * @return string[]
      */
-    protected function extractPathPrefixes(NodeInterface $errorNode): array
+    protected function extractPathPrefixes(SiteNodeName $siteNodeName, Node $errorNode): array
     {
-        $controllerContext = $this->controllerContextFactory->buildControllerContext(new Uri());
-        $errorUrl = new Uri($this->linkingService->createNodeUri($controllerContext, $errorNode));
+        $siteDetectionResult = SiteDetectionResult::create(
+            $siteNodeName,
+            $errorNode->contentRepositoryId
+        );
+
+        $actionRequest = $this->actionRequestFactory->buildActionRequest($siteDetectionResult);
+
+        $nodeUriBuilder = $this->nodeUriBuilderFactory->forActionRequest($actionRequest);
+        $errorUrl = $nodeUriBuilder->uriFor(NodeAddress::fromNode($errorNode));
+
         return [dirname($errorUrl->getPath())];
     }
 }

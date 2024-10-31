@@ -5,18 +5,21 @@ declare(strict_types=1);
 namespace Netlogix\ErrorHandler\Configuration;
 
 use Generator;
-use Neos\ContentRepository\Domain\Service\ContextFactoryInterface;
+use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
 use Neos\Eel\CompilingEvaluator;
-use Neos\Eel\Utility as EelUtility;
 use Neos\Flow\Annotations as Flow;
+use Neos\Flow\Mvc\Routing\Dto\RouteParameters;
+use Neos\Flow\ObjectManagement\ObjectManagerInterface;
 use Neos\Neos\Domain\Model\Site;
-use Neos\Neos\Service\LinkingService;
+use Neos\Neos\FrontendRouting\DimensionResolution\DimensionResolverFactoryInterface;
+use Neos\Neos\FrontendRouting\DimensionResolution\RequestToDimensionSpacePointContext;
+use Neos\Neos\FrontendRouting\SiteDetection\SiteDetectionResult;
+use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\UriInterface;
 
 use function array_filter;
 use function array_values;
 use function current;
-use function explode;
 use function in_array;
 use function iterator_to_array;
 
@@ -28,40 +31,37 @@ use function iterator_to_array;
  *      source: string,
  *      destination: string,
  *      dimensionPathSegment?: string,
- *      pathPrefixes?: string[]
+ *      pathPrefixes?: string[],
+ *      position: int
  *  }
  */
 class ErrorHandlerConfiguration
 {
-    /**
-     * @Flow\Inject(lazy=false)
-     * @var CompilingEvaluator
-     */
-    protected $eelEvaluator;
+    #[Flow\Inject]
+    protected CompilingEvaluator $eelEvaluator;
 
-    /**
-     * @Flow\Inject(lazy=false)
-     * @var ContextFactoryInterface
-     */
-    protected ContextFactoryInterface $contextFactory;
-
-    /**
-     * @Flow\Inject(lazy=false)
-     * @var LinkingService
-     */
-    protected LinkingService $linkingService;
-
-    /**
-     * @Flow\Inject(lazy=false)
-     * @var NodeBasedConfiguration
-     */
+    #[Flow\Inject]
     protected NodeBasedConfiguration $nodeBasedConfiguration;
 
-    /**
-     * @Flow\Inject(lazy=false)
-     * @var SettingsBasedConfiguration
-     */
-    protected SettingsBasedConfiguration $settingsBasedConfiguration;
+    #[Flow\Inject]
+    protected ObjectManagerInterface $objectManager;
+
+    private function resolveDimensionSpacePointFromRequest(Site $site, string $requestPath): DimensionSpacePoint
+    {
+        $siteConfiguration = $site->getConfiguration();
+        $dimensionResolverFactory = $this->objectManager->get(
+            $siteConfiguration->contentDimensionResolverFactoryClassName
+        );
+        assert($dimensionResolverFactory instanceof DimensionResolverFactoryInterface);
+        $dimensionResolver = $dimensionResolverFactory->create($siteConfiguration->contentRepositoryId, $siteConfiguration);
+        $siteDetectionResult = SiteDetectionResult::create($site->getNodeName(), $siteConfiguration->contentRepositoryId);
+        $routeParameters = $siteDetectionResult->storeInRouteParameters(RouteParameters::createEmpty());
+
+        $dimensionResolverContext = RequestToDimensionSpacePointContext::fromUriPathAndRouteParametersAndResolvedSite($requestPath, $routeParameters, $site);
+        $dimensionResolverContext = $dimensionResolver->fromRequestToDimensionSpacePoint($dimensionResolverContext);
+
+        return $dimensionResolverContext->resolvedDimensionSpacePoint;
+    }
 
     /**
      *
@@ -77,12 +77,12 @@ class ErrorHandlerConfiguration
      */
     public function findConfigurationForSite(
         Site $site,
-        UriInterface $uri,
+        ServerRequestInterface $request,
         int $statusCode
     ) {
-        $siteName = $site->getNodeName();
-        $requestPath = ltrim($uri->getPath() ?? '', '/');
-        $requestedDimensionPathSegment = current(explode('/', $requestPath, 2));
+        $siteName = (string)$site->getNodeName();
+        $requestPath = ltrim($request->getUri()->getPath() ?? '', '/');
+        $dimensionSpacePoint = $this->resolveDimensionSpacePointFromRequest($site, $requestPath);
 
         $configurationsForSite = $this->getConfiguration();
         $configurationsForSite = array_key_exists(
@@ -90,62 +90,30 @@ class ErrorHandlerConfiguration
             $configurationsForSite
         ) ? $configurationsForSite[$siteName] : [];
 
-        $matchingStatusCodes = array_filter($configurationsForSite,
+        $configurationsForSite = array_filter($configurationsForSite,
             function (array $configuration) use ($statusCode) {
                 return in_array($statusCode, $configuration['matchingStatusCodes'] ?? [], true);
             });
 
-        $matchingDimensions = array_filter($matchingStatusCodes,
-            function (array $configuration) use ($requestedDimensionPathSegment) {
-                $dimensionPathSegment = $configuration['dimensionPathSegment'] ?? '';
-                if ($dimensionPathSegment === '' && empty($configuration['dimensions'] ?? [])) {
-                    return true;
+        $configurationsForSite = array_filter($configurationsForSite,
+            function (array $configuration) use ($dimensionSpacePoint) {
+                $configuredDimensionSpacePoint = DimensionSpacePoint::fromArray($configuration['dimensions']);
+
+                return $configuredDimensionSpacePoint->equals($dimensionSpacePoint);
+            });
+
+        $configurationsForSite = array_filter($configurationsForSite,
+            function (array $configuration) use ($requestPath) {
+                foreach ($configuration['pathPrefixes'] ?? [] as $pathPrefix) {
+                    if (strpos($requestPath, ltrim($pathPrefix, '/')) === 0) {
+                        return true;
+                    }
                 }
 
-                return $dimensionPathSegment === $requestedDimensionPathSegment;
+                return false;
             });
 
-        $configurationWithPathPrefixes = array_filter($matchingDimensions,
-            function (array $configuration) {
-                return !empty($configuration['pathPrefixes'] ?? []);
-            });
-
-        $configurationsWithoutPathPrefixes = array_filter($matchingDimensions,
-            function (array $configuration) {
-                return empty($configuration['pathPrefixes'] ?? []);
-            });
-
-        if (!empty($configurationWithPathPrefixes)) {
-            $matchingPathPrefixes = array_filter($matchingDimensions,
-                function (array $configuration) use ($requestPath) {
-                    foreach ($configuration['pathPrefixes'] ?? [] as $pathPrefix) {
-                        if (strpos($requestPath, ltrim($pathPrefix, '/')) === 0) {
-                            return true;
-                        }
-                    }
-
-                    return false;
-                });
-
-            if (empty($matchingPathPrefixes)) {
-                return current($configurationsWithoutPathPrefixes);
-            }
-
-            return current($matchingPathPrefixes);
-        }
-
-        return current($configurationsWithoutPathPrefixes) ?: current($matchingStatusCodes) ?: null;
-    }
-
-    /**
-     * @param string $expression
-     * @param array $context
-     * @return mixed
-     * @throws \Neos\Eel\Exception
-     */
-    protected function evaluateEelExpression(string $expression, array $context)
-    {
-        return EelUtility::evaluateEelExpression($expression, $this->eelEvaluator, $context, []);
+        return current($configurationsForSite) ?: null;
     }
 
     /**
@@ -162,11 +130,10 @@ class ErrorHandlerConfiguration
     private function generateConfiguration(): Generator
     {
         $nodeBased = $this->nodeBasedConfiguration->getConfiguration();
-        $settingsBased = $this->settingsBasedConfiguration->getConfiguration();
 
-        $sites = array_keys($nodeBased + $settingsBased);
+        $sites = array_keys($nodeBased);
         foreach ($sites as $site) {
-            yield $site => array_values(array_merge(($nodeBased[$site] ?? []), ($settingsBased[$site] ?? [])));
+            yield $site => array_values($nodeBased[$site] ?? []);
         }
     }
 

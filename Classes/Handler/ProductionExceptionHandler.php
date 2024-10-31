@@ -10,7 +10,6 @@ use Netlogix\ErrorHandler\Service\ErrorPageResolver;
 
 class ProductionExceptionHandler extends FlowProductionExceptionHandler
 {
-
     /**
      * @param int $statusCode
      * @param string|null $referenceCode
@@ -38,14 +37,8 @@ class ProductionExceptionHandler extends FlowProductionExceptionHandler
         return $errorPageResolver->findErrorPageForCurrentRequestAndStatusCode($statusCode);
     }
 
-    /**
-     * Override new method introduced in Flow 6.3.16
-     *
-     * @return bool
-     */
     protected function useCustomErrorView(): bool
     {
         return false;
     }
-
 }

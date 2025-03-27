@@ -105,7 +105,6 @@ class NodeBasedConfiguration
             }
 
             usort($configurationsForSite[$sitename], fn($a, $b) => $a['position'] <=> $b['position']);
-            $configurationsForSite[$sitename] = array_map(fn($item) => array_diff_key($item, ['position' => 0]), $configurationsForSite[$sitename]);
             $configurationsForSite[$sitename] = array_values($configurationsForSite[$sitename]);
         }
 

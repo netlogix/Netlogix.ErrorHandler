@@ -14,6 +14,7 @@ use Neos\ContentRepository\Domain\Service\ContextFactoryInterface;
 use Neos\Eel\FlowQuery\FlowQuery;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Log\ThrowableStorageInterface;
+use Neos\Neos\Domain\Service\ConfigurationContentDimensionPresetSource;
 use Neos\Neos\Domain\Service\ContentContext;
 use Neos\Neos\Service\LinkingService;
 use Netlogix\ErrorHandler\Service\ControllerContextFactory;
@@ -68,6 +69,12 @@ class NodeBasedConfiguration
      * @var ThrowableStorageInterface
      */
     protected ThrowableStorageInterface $throwableStorage;
+
+    /**
+     * @var ConfigurationContentDimensionPresetSource
+     * @Flow\Inject(lazy=false)
+     */
+    protected ConfigurationContentDimensionPresetSource $configurationContentDimensionPresetSource;
 
     /**
      * @Flow\InjectConfiguration(path="destination")
@@ -191,13 +198,19 @@ class NodeBasedConfiguration
 
     protected function extractDimensionsPathSegment(NodeInterface $errorNode): string
     {
-        $result = [];
-        foreach ($errorNode->getDimensions() as $singleDimensionValues) {
-            foreach ($singleDimensionValues as $singleDimensionValue) {
-                $result[] = $singleDimensionValue;
-            }
+        if ($errorNode->getDimensions() === []) {
+            return '';
         }
-        return join('-', $result);
+
+        $result = [];
+        foreach ($errorNode->getDimensions() as $dimension => $singleDimensionValues) {
+            $preset = $this->configurationContentDimensionPresetSource->findPresetByDimensionValues(
+                $dimension, $singleDimensionValues
+            );
+
+            $result[] = $preset['uriSegment'];
+        }
+        return join('_', $result);
     }
 
     /**

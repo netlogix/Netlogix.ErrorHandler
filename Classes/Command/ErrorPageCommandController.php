@@ -24,6 +24,7 @@ use Netlogix\ErrorHandler\Service\DestinationResolver;
 use RuntimeException;
 use Symfony\Component\Yaml\Yaml;
 
+use Throwable;
 use function dirname;
 use function fopen;
 use function is_dir;
@@ -91,44 +92,50 @@ class ErrorPageCommandController extends CommandController
         $hadError = false;
 
         foreach ($this->configuration->getConfiguration() as $siteNodeName => $configurations) {
-            foreach ($configurations as $configuration) {
-                $site = $this->siteRepository->findOneByNodeName($siteNodeName);
-                assert($site instanceof Site);
+            $verbose && $this->outputLine('<comment>Site [%s]</comment>', [$siteNodeName]);
+            $site = $this->siteRepository->findOneByNodeName($siteNodeName);
+            assert($site instanceof Site);
+            if (!$site->isOnline()) {
+                $verbose && $this->outputLine("\t<error>Site %s is not online</error>", [$siteNodeName]);
+                continue;
+            }
 
-                if (!$site->isOnline()) {
-                    $verbose && $this->outputLine('Site %s is not online', [$siteNodeName]);
-                    continue;
-                }
+            foreach ($configurations as $configuration) {
                 try {
                     $requestUri = $this->getSiteUri($site, $configuration);
-                } catch (\Exception $e) {
-                    $verbose && $this->outputLine('Could not resolve Error Page Uri for %s, "%s"', [$siteNodeName, $e->getMessage()]);
+                } catch (Throwable $t) {
+                    $verbose && $this->outputLine('\t<error>Could not resolve error page uri for %s, "%s"</error>', [$siteNodeName, $t->getMessage()]);
                     continue;
                 }
-                $verbose && $this->outputLine('Downloading Error Page for %s from %s', [$siteNodeName, $requestUri]);
+                $destination = $this->destinationResolver->getDestinationForConfiguration($configuration, $siteNodeName);
+                $verbose && $this->outputLine("\t<info>Saving error page <u>%s</u> to <u>%s</u></info>", [$requestUri, $destination]);
 
                 try {
                     $response = $client->get($requestUri);
-                } catch (\Exception $e) {
+                } catch (Throwable $t) {
                     $hadError = true;
-                    $this->outputLine('Could not fetch Error Page for %s, "%s"', [$siteNodeName, $e->getMessage()]);
+                    $this->outputLine("\t<error>Could not fetch error page for %s, \"%s\"</error>", [$siteNodeName, $t->getMessage()]);
                     continue;
                 }
 
-                $destination = $this->destinationResolver->getDestinationForConfiguration($configuration, $siteNodeName);
                 $directory = dirname($destination);
                 if (!is_dir($directory)) {
                     try {
                         Files::createDirectoryRecursively($directory);
-                    } catch (\Exception $e) {
+                    } catch (Throwable $t) {
                         $hadError = true;
-                        $this->outputLine('Could not create target directory for %s, "%s"', [$siteNodeName, $e->getMessage()]);
+                        $this->outputLine("\t<error>Could not create target directory for %s, \"%s\"</error>", [$siteNodeName, $t->getMessage()]);
                         continue;
                     }
                 }
-                $verbose && $this->outputLine('Saving Error Page for %s to %s', [$siteNodeName, $destination]);
-                $file = fopen($destination, 'w+');
-                stream_copy_to_stream(StreamWrapper::getResource($response->getBody()), $file);
+                try {
+                    $file = fopen($destination, 'w+');
+                    stream_copy_to_stream(StreamWrapper::getResource($response->getBody()), $file);
+                } catch (Throwable $t) {
+                    $hadError = true;
+                    $this->outputLine("\t<error>Could not save error page, \"%s\"</error>", [$t->getMessage()]);
+                    continue;
+                }
             }
         }
 

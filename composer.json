@@ -17,7 +17,8 @@
         }
     },
     "suggest": {
-        "netlogix/sentry": "Log exceptions to sentry"
+        "netlogix/sentry": "Log exceptions to sentry",
+        "netlogix/cli-increasedatabasetimeout": "Increase database timeout errorpage:generate command"
     },
     "extra": {
         "neos": {

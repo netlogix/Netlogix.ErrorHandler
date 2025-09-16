@@ -1,0 +1,5 @@
+Netlogix:
+  Cli:
+    IncreaseDatabaseTimeout:
+      timeouts:
+        'errorpage:generate': 3600

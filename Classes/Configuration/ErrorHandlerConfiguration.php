@@ -10,9 +10,13 @@ use Neos\Eel\CompilingEvaluator;
 use Neos\Eel\Utility as EelUtility;
 use Neos\Flow\Annotations as Flow;
 use Neos\Neos\Domain\Model\Site;
+use Neos\Neos\Domain\Service\ConfigurationContentDimensionPresetSource;
+use Neos\Neos\Routing\FrontendNodeRoutePartHandlerInterface;
 use Neos\Neos\Service\LinkingService;
 use Psr\Http\Message\UriInterface;
 
+use ReflectionMethod;
+use Throwable;
 use function array_filter;
 use function array_values;
 use function current;
@@ -64,6 +68,18 @@ class ErrorHandlerConfiguration
     protected SettingsBasedConfiguration $settingsBasedConfiguration;
 
     /**
+     * @Flow\Inject(lazy=false)
+     * @var FrontendNodeRoutePartHandlerInterface
+     */
+    protected FrontendNodeRoutePartHandlerInterface $frontendNodeRoutePartHandler;
+
+    /**
+     * @Flow\Inject(lazy=false)
+     * @var ConfigurationContentDimensionPresetSource
+     */
+    protected ConfigurationContentDimensionPresetSource $configurationContentDimensionPresetSource;
+
+    /**
      *
      * /**
      * Find error page configuration by Site, Dimension (parsed in $uri) and status code.
@@ -82,7 +98,7 @@ class ErrorHandlerConfiguration
     ) {
         $siteName = $site->getNodeName();
         $requestPath = ltrim($uri->getPath() ?? '', '/');
-        $requestedDimensionPathSegment = current(explode('/', $requestPath, 2));
+        $requestedDimensionPathSegment = $this->resolveRequestedDimensionPathSegment($requestPath);
 
         $configurationsForSite = $this->getConfiguration();
         $configurationsForSite = array_key_exists(
@@ -138,6 +154,14 @@ class ErrorHandlerConfiguration
     }
 
     /**
+     * @return array<string, SiteConfiguration[]>
+     */
+    public function getConfiguration(): array
+    {
+        return iterator_to_array($this->generateConfiguration());
+    }
+
+    /**
      * @param string $expression
      * @param array $context
      * @return mixed
@@ -148,12 +172,32 @@ class ErrorHandlerConfiguration
         return EelUtility::evaluateEelExpression($expression, $this->eelEvaluator, $context, []);
     }
 
-    /**
-     * @return array<string, SiteConfiguration[]>
-     */
-    public function getConfiguration()
+    private function resolveRequestedDimensionPathSegment(string $requestPath): string
     {
-        return iterator_to_array($this->generateConfiguration());
+        if (method_exists($this->frontendNodeRoutePartHandler, 'parseDimensionsAndNodePathFromRequestPath')) {
+            try {
+                $reflectionMethod = new ReflectionMethod(
+                    $this->frontendNodeRoutePartHandler,
+                    'parseDimensionsAndNodePathFromRequestPath'
+                );
+                $reflectionMethod->setAccessible(true);
+                $parsedDimensions = $reflectionMethod->invokeArgs($this->frontendNodeRoutePartHandler, [&$requestPath]);
+                $result = [];
+
+                foreach ($parsedDimensions as $dimension => $values) {
+                    $preset = $this->configurationContentDimensionPresetSource->findPresetByDimensionValues(
+                        $dimension, $values
+                    );
+
+                    $result[] = $preset['uriSegment'];
+                }
+
+                return join('_', $result);
+            } catch (Throwable) {
+            }
+        }
+
+        return current(explode('/', $requestPath, 2));
     }
 
     /**

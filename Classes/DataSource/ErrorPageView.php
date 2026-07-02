@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Netlogix\ErrorHandler\DataSource;
 
-use Neos\ContentRepository\Domain\Model\NodeInterface;
+use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
 use Neos\Neos\Domain\Model\Domain;
 use Neos\Neos\Domain\Repository\DomainRepository;
 use Neos\Neos\Service\DataSource\DataSourceInterface;
@@ -14,25 +14,16 @@ use Netlogix\ErrorHandler\Service\DestinationResolver;
 
 final class ErrorPageView implements DataSourceInterface
 {
-    /**
-     * @var NodeBasedConfiguration
-     * @Flow\Inject
-     */
-    protected $nodeBasedConfiguration;
+    #[Flow\Inject]
+    protected NodeBasedConfiguration $nodeBasedConfiguration;
 
-    /**
-     * @var DomainRepository
-     * @Flow\Inject
-     */
-    protected $domainRepository;
+    #[Flow\Inject]
+    protected DomainRepository $domainRepository;
 
-    /**
-     * @var DestinationResolver
-     * @Flow\Inject
-     */
-    protected $destinationResolver;
+    #[Flow\Inject]
+    protected DestinationResolver $destinationResolver;
 
-    public function getData(NodeInterface $node = null, array $arguments = []): array
+    public function getData(Node $node = null, array $arguments = []): array
     {
         if (!$node) {
             return [];
@@ -41,14 +32,15 @@ final class ErrorPageView implements DataSourceInterface
         if (!($domain instanceof Domain)) {
             return [];
         }
-        $config = $this->nodeBasedConfiguration->getErrorNodeConfiguration($node);
+        $config = $this->nodeBasedConfiguration->getErrorNodeConfiguration($domain->getSite()->getNodeName(), $node);
+
         return [
             'data' => [
                 'rows' => [
                     [
                         'destination' => $this->destinationResolver->getDestinationForConfiguration(
                             $config,
-                            $domain->getSite()->getNodeName()
+                            (string)$domain->getSite()->getNodeName()
                         ),
                     ],
                 ]

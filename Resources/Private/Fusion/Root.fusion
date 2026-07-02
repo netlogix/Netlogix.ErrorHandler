@@ -1,6 +1,6 @@
 error = Neos.Fusion:Case {
     nlxErrorHandler {
-        @position = 'before default'
+        @position = 'start 1000'
 
         errorPage = ${Netlogix.ErrorPageResolver.findErrorPageForCurrentRequestAndStatusCode(statusCode)}
         condition = ${this.errorPage != null && File.exists(this.errorPage)}

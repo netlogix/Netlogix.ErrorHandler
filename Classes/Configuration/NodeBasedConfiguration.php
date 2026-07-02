@@ -12,7 +12,7 @@ use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindChildNodesFilter;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindRootNodeAggregatesFilter;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Node;
-use Neos\ContentRepository\Core\Projection\ContentGraph\VisibilityConstraints;
+use Neos\Neos\Domain\SubtreeTagging\NeosVisibilityConstraints;
 use Neos\ContentRepository\Core\SharedModel\Node\NodeAddress;
 use Neos\ContentRepository\Core\SharedModel\Workspace\WorkspaceName;
 use Neos\ContentRepositoryRegistry\ContentRepositoryRegistry;
@@ -141,7 +141,7 @@ class NodeBasedConfiguration
             foreach ($this->combineAllDimensionSpacePoints($contentRepository) as $dimensionSpacePoint) {
                 $subgraph = $contentGraph->getSubgraph(
                     $dimensionSpacePoint,
-                    VisibilityConstraints::frontend()
+                    NeosVisibilityConstraints::excludeRemoved()->merge(NeosVisibilityConstraints::excludeDisabled())
                 );
 
                 $children = $subgraph->findChildNodes(
@@ -152,6 +152,12 @@ class NodeBasedConfiguration
                 );
 
                 foreach ($children as $child) {
+                    // findChildNodes() returns every site under the shared "Neos.Neos:Sites" root,
+                    // not just the one belonging to the current $site; filter down to avoid
+                    // processing (and later saving an error page for) every other site N times over.
+                    if ((string)$child->name !== (string)$site->getNodeName()) {
+                        continue;
+                    }
                     yield $site->getNodeName() => $child;
                 }
             }
@@ -165,6 +171,14 @@ class NodeBasedConfiguration
     protected function combineAllDimensionSpacePoints(ContentRepository $contentRepository): iterable
     {
         $contentDimensions = $contentRepository->getContentDimensionSource()->getContentDimensionsOrderedByPriority();
+
+        if (count($contentDimensions) === 0) {
+            // Sites without any content dimensions configured still have exactly one
+            // (empty) DimensionSpacePoint; the combination loop below never runs for
+            // zero dimensions, which would otherwise yield no site nodes at all.
+            return [DimensionSpacePoint::createWithoutDimensions()];
+        }
+
         $combinations = [];
 
         foreach ($contentDimensions as $contentDimension) {

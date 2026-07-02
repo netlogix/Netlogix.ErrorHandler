@@ -160,7 +160,9 @@ class ErrorPageCommandController extends CommandController
         $nodeAggregate = $contentGraph->findNodeAggregateById(NodeAggregateId::fromString(substr($configuration['source'], 1)));
         $dimensionSpacePoint = DimensionSpacePoint::fromJsonString(json_encode($configuration['dimensions']));
 
-        $source = $nodeAggregate->getNodeByCoveredDimensionSpacePoint($dimensionSpacePoint);
+        $source = $nodeAggregate->getNodeByOccupiedDimensionSpacePoint(
+            $nodeAggregate->getOccupationByCovered($dimensionSpacePoint)
+        );
 
         if (!$this->isNodeVisible($source)) {
             throw new NodeNotFoundException('Node ' . $source->aggregateId . ' is not visible', 1552492532);

@@ -23,7 +23,7 @@ final class ErrorPageView implements DataSourceInterface
     #[Flow\Inject]
     protected DestinationResolver $destinationResolver;
 
-    public function getData(Node $node = null, array $arguments = []): array
+    public function getData(?Node $node = null, array $arguments = []): array
     {
         if (!$node) {
             return [];

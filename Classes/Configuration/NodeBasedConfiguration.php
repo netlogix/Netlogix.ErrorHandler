@@ -7,7 +7,6 @@ namespace Netlogix\ErrorHandler\Configuration;
 use Exception;
 use Generator;
 use Neos\ContentRepository\Core\ContentRepository;
-use Neos\ContentRepository\Core\Dimension\ContentDimension;
 use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindChildNodesFilter;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindRootNodeAggregatesFilter;
@@ -170,35 +169,7 @@ class NodeBasedConfiguration
      */
     protected function combineAllDimensionSpacePoints(ContentRepository $contentRepository): iterable
     {
-        $contentDimensions = $contentRepository->getContentDimensionSource()->getContentDimensionsOrderedByPriority();
-
-        if (count($contentDimensions) === 0) {
-            // Sites without any content dimensions configured still have exactly one
-            // (empty) DimensionSpacePoint; the combination loop below never runs for
-            // zero dimensions, which would otherwise yield no site nodes at all.
-            return [DimensionSpacePoint::createWithoutDimensions()];
-        }
-
-        $combinations = [];
-
-        foreach ($contentDimensions as $contentDimension) {
-            assert($contentDimension instanceof ContentDimension);
-
-            foreach ($contentDimension->values as $contentDimensionValue) {
-                foreach ($contentDimensions as $otherContentDimension) {
-                    foreach ($otherContentDimension->values as $otherContentDimensionValue) {
-                        $coordinates = array_merge(
-                            [(string)$contentDimension->id->jsonSerialize() => $contentDimensionValue->value],
-                            [(string)$otherContentDimension->id->jsonSerialize() => $otherContentDimensionValue->value]
-                        );
-                        ksort($coordinates);
-                        $combinations[sha1(join('', $coordinates))] = DimensionSpacePoint::fromArray($coordinates);
-                    }
-                }
-            }
-        }
-
-        return array_values($combinations);
+        return $contentRepository->getVariationGraph()->getDimensionSpacePoints();
     }
 
     /**

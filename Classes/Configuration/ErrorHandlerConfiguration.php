@@ -6,7 +6,6 @@ namespace Netlogix\ErrorHandler\Configuration;
 
 use Generator;
 use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
-use Neos\Eel\CompilingEvaluator;
 use Neos\Flow\Annotations as Flow;
 use Neos\Flow\Mvc\Routing\Dto\RouteParameters;
 use Neos\Flow\ObjectManagement\ObjectManagerInterface;
@@ -37,9 +36,6 @@ use function iterator_to_array;
  */
 class ErrorHandlerConfiguration
 {
-    #[Flow\Inject]
-    protected CompilingEvaluator $eelEvaluator;
-
     #[Flow\Inject]
     protected NodeBasedConfiguration $nodeBasedConfiguration;
 

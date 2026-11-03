@@ -157,7 +157,11 @@ class ErrorPageCommandController extends CommandController
         $contentRepository = $this->contentRepositoryRegistry->get($site->getConfiguration()->contentRepositoryId);
         $contentGraph = $contentRepository->getContentGraph(WorkspaceName::fromString(WorkspaceName::WORKSPACE_NAME_LIVE));
 
-        $nodeAggregate = $contentGraph->findNodeAggregateById(NodeAggregateId::fromString(substr($configuration['source'], 1)));
+        $nodeAggregateId = NodeAggregateId::fromString(substr($configuration['source'], 1));
+        $nodeAggregate = $contentGraph->findNodeAggregateById($nodeAggregateId);
+        if (!$nodeAggregate) {
+            throw new NodeNotFoundException('Node ' . $nodeAggregateId->value . ' does not exist in live', 1793700331);
+        }
         $dimensionSpacePoint = DimensionSpacePoint::fromJsonString(json_encode($configuration['dimensions']));
 
         $source = $nodeAggregate->getNodeByOccupiedDimensionSpacePoint(

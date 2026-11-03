@@ -16,7 +16,7 @@ class ProductionExceptionHandler extends FlowProductionExceptionHandler
      * @return string
      * @throws \Exception
      */
-    protected function renderStatically(int $statusCode, string $referenceCode = null): string
+    protected function renderStatically(int $statusCode, ?string $referenceCode = null): string
     {
         $errorPage = $this->findErrorPageConfigurationForRequest($statusCode);
 

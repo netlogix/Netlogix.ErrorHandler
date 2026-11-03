@@ -17,14 +17,23 @@ use Throwable;
  */
 class ErrorPageResolver implements ProtectedContextAwareInterface
 {
-    public function __construct(
-        protected ErrorHandlerConfiguration $errorHandlerConfiguration,
-        protected Bootstrap $bootstrap,
-        protected DomainRepository $domainRepository,
-        protected DestinationResolver $destinationResolver,
-        protected ThrowableStorageInterface $throwableStorage,
-    ) {
-    }
+    /**
+     * Property injection, Eel instantiates its helpers without the object manager.
+     */
+    #[Flow\Inject]
+    protected ErrorHandlerConfiguration $errorHandlerConfiguration;
+
+    #[Flow\Inject]
+    protected Bootstrap $bootstrap;
+
+    #[Flow\Inject]
+    protected DomainRepository $domainRepository;
+
+    #[Flow\Inject]
+    protected DestinationResolver $destinationResolver;
+
+    #[Flow\Inject]
+    protected ThrowableStorageInterface $throwableStorage;
 
     public function findErrorPageForCurrentRequestAndStatusCode(int $statusCode): ?string
     {
